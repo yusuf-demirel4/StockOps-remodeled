@@ -1,0 +1,1031 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { createInitialState } from "@stockops/core/demo-data";
+import {
+  assertEnoughStock,
+  buildStockRows,
+  getOpenPurchaseOrders,
+  getOpenSalesOrders,
+} from "@stockops/core/inventory";
+import {
+  productInputSchema,
+  productUpdateInputSchema,
+  purchaseOrderInputSchema,
+  salesOrderInputSchema,
+  stockMovementInputSchema,
+  supplierInputSchema,
+  supplierUpdateInputSchema,
+} from "@stockops/core/schemas";
+import type {
+  AppState,
+  AuthContext,
+  Product,
+  PurchaseOrder,
+  PurchaseOrderLine,
+  SalesOrder,
+  StockMovement,
+  StockMovementType,
+  Supplier,
+  Warehouse,
+} from "@stockops/core/types";
+import { getPrisma } from "@stockops/db";
+import type { ZodType } from "zod";
+
+type ProductListItem = Product & {
+  totalOnHand: number;
+};
+
+const globalForApiDemo = globalThis as typeof globalThis & {
+  stockOpsApiState?: AppState;
+};
+
+function demoState() {
+  globalForApiDemo.stockOpsApiState ??= createInitialState();
+  return globalForApiDemo.stockOpsApiState;
+}
+
+function parseInput<T>(schema: ZodType<T>, input: unknown): T {
+  const parsed = schema.safeParse(input);
+
+  if (!parsed.success) {
+    throw new BadRequestException(parsed.error.flatten());
+  }
+
+  return parsed.data;
+}
+
+function dbMode() {
+  return process.env.APP_DATA_SOURCE === "database";
+}
+
+function id(prefix: string) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function nextCode(prefix: string, count: number) {
+  return `${prefix}-${String(count + 1001).padStart(4, "0")}`;
+}
+
+function assertEnoughStockForApi(
+  movements: StockMovement[],
+  warehouseId: string,
+  lines: { productId: string; quantity: number }[],
+) {
+  try {
+    assertEnoughStock(movements, warehouseId, lines);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.startsWith("Insufficient stock")
+    ) {
+      throw new BadRequestException(error.message);
+    }
+
+    throw error;
+  }
+}
+
+function mapProduct(product: {
+  id: string;
+  organizationId: string;
+  sku: string;
+  name: string;
+  barcode: string | null;
+  category: string;
+  description: string | null;
+  minimumStock: number;
+  isActive: boolean;
+}): Product {
+  return {
+    id: product.id,
+    organizationId: product.organizationId,
+    sku: product.sku,
+    name: product.name,
+    barcode: product.barcode ?? undefined,
+    category: product.category,
+    description: product.description ?? undefined,
+    minimumStock: product.minimumStock,
+    isActive: product.isActive,
+  };
+}
+
+function mapWarehouse(warehouse: {
+  id: string;
+  organizationId: string;
+  code: string;
+  name: string;
+  isDefault: boolean;
+}): Warehouse {
+  return {
+    id: warehouse.id,
+    organizationId: warehouse.organizationId,
+    code: warehouse.code,
+    name: warehouse.name,
+    isDefault: warehouse.isDefault,
+  };
+}
+
+function mapStockMovement(movement: {
+  id: string;
+  organizationId: string;
+  warehouseId: string;
+  productId: string;
+  type: string;
+  quantityChange: number;
+  reference: string | null;
+  note: string | null;
+  createdById: string | null;
+  createdAt: Date;
+}): StockMovement {
+  return {
+    id: movement.id,
+    organizationId: movement.organizationId,
+    warehouseId: movement.warehouseId,
+    productId: movement.productId,
+    type: movement.type as StockMovementType,
+    quantityChange: movement.quantityChange,
+    reference: movement.reference ?? undefined,
+    note: movement.note ?? undefined,
+    createdById: movement.createdById ?? undefined,
+    createdAt: movement.createdAt.toISOString(),
+  };
+}
+
+@Injectable()
+export class StockOpsApiService {
+  async listProducts(context: AuthContext): Promise<ProductListItem[]> {
+    if (dbMode()) {
+      const [products, rows] = await Promise.all([
+        this.listDatabaseProducts(context),
+        this.listStockRows(context),
+      ]);
+
+      return products.map((product) => ({
+        ...product,
+        totalOnHand: rows
+          .filter((row) => row.product.id === product.id)
+          .reduce((total, row) => total + row.onHand, 0),
+      }));
+    }
+
+    const state = demoState();
+    const products = state.products.filter(
+      (product) => product.organizationId === context.organization.id,
+    );
+    const rows = this.listDemoStockRows(context);
+
+    return products.map((product) => ({
+      ...product,
+      totalOnHand: rows
+        .filter((row) => row.product.id === product.id)
+        .reduce((total, row) => total + row.onHand, 0),
+    }));
+  }
+
+  async getProduct(productId: string, context: AuthContext) {
+    const product = (await this.listProducts(context)).find(
+      (item) => item.id === productId,
+    );
+
+    if (!product) {
+      throw new NotFoundException("Product not found.");
+    }
+
+    return product;
+  }
+
+  async createProduct(input: unknown, context: AuthContext) {
+    const parsed = parseInput(productInputSchema, input);
+
+    if (dbMode()) {
+      try {
+        const product = await getPrisma().product.create({
+          data: {
+            organizationId: context.organization.id,
+            sku: parsed.sku,
+            name: parsed.name,
+            barcode: parsed.barcode || null,
+            category: parsed.category,
+            minimumStock: parsed.minimumStock,
+          },
+        });
+        await this.audit(context, "CREATE", "Product", product.id, parsed.sku);
+        return mapProduct(product);
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("Unique constraint")) {
+          throw new ConflictException("SKU already exists.");
+        }
+        throw error;
+      }
+    }
+
+    const state = demoState();
+    const exists = state.products.some(
+      (product) =>
+        product.organizationId === context.organization.id &&
+        product.sku === parsed.sku,
+    );
+
+    if (exists) {
+      throw new ConflictException("SKU already exists.");
+    }
+
+    const product: Product = {
+      ...parsed,
+      id: id("prd"),
+      organizationId: context.organization.id,
+      barcode: parsed.barcode || undefined,
+      isActive: true,
+    };
+
+    state.products.unshift(product);
+    return product;
+  }
+
+  async updateProduct(productId: string, input: unknown, context: AuthContext) {
+    const parsed = parseInput(productUpdateInputSchema, input);
+
+    if (dbMode()) {
+      const product = await getPrisma().product.findFirst({
+        where: { id: productId, organizationId: context.organization.id },
+      });
+
+      if (!product) {
+        throw new NotFoundException("Product not found.");
+      }
+
+      try {
+        const updated = await getPrisma().product.update({
+          where: { id: product.id },
+          data: {
+            sku: parsed.sku,
+            name: parsed.name,
+            barcode:
+              parsed.barcode === undefined ? undefined : parsed.barcode || null,
+            category: parsed.category,
+            minimumStock: parsed.minimumStock,
+          },
+        });
+
+        await this.audit(context, "UPDATE", "Product", updated.id, updated.sku);
+        return mapProduct(updated);
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("Unique constraint")) {
+          throw new ConflictException("SKU already exists.");
+        }
+        throw error;
+      }
+    }
+
+    const state = demoState();
+    const product = state.products.find(
+      (item) =>
+        item.id === productId && item.organizationId === context.organization.id,
+    );
+
+    if (!product) {
+      throw new NotFoundException("Product not found.");
+    }
+
+    if (
+      parsed.sku &&
+      state.products.some(
+        (item) =>
+          item.organizationId === context.organization.id &&
+          item.id !== product.id &&
+          item.sku === parsed.sku,
+      )
+    ) {
+      throw new ConflictException("SKU already exists.");
+    }
+
+    Object.assign(product, {
+      ...parsed,
+      barcode: parsed.barcode === "" ? undefined : parsed.barcode,
+    });
+
+    return product;
+  }
+
+  async deactivateProduct(productId: string, context: AuthContext) {
+    if (dbMode()) {
+      const product = await getPrisma().product.findFirst({
+        where: { id: productId, organizationId: context.organization.id },
+      });
+
+      if (!product) {
+        throw new NotFoundException("Product not found.");
+      }
+
+      const updated = await getPrisma().product.update({
+        where: { id: product.id },
+        data: { isActive: false },
+      });
+
+      await this.audit(context, "UPDATE", "Product", updated.id, updated.sku);
+      return mapProduct(updated);
+    }
+
+    const product = demoState().products.find(
+      (item) =>
+        item.id === productId && item.organizationId === context.organization.id,
+    );
+
+    if (!product) {
+      throw new NotFoundException("Product not found.");
+    }
+
+    product.isActive = false;
+    return product;
+  }
+
+  async listSuppliers(context: AuthContext): Promise<Supplier[]> {
+    if (dbMode()) {
+      const suppliers = await getPrisma().supplier.findMany({
+        where: { organizationId: context.organization.id },
+        include: { products: true },
+        orderBy: { name: "asc" },
+      });
+
+      return suppliers.map((supplier) => ({
+        id: supplier.id,
+        organizationId: supplier.organizationId,
+        name: supplier.name,
+        contactName: supplier.contactName ?? undefined,
+        email: supplier.email ?? undefined,
+        phone: supplier.phone ?? undefined,
+        leadTimeDays: supplier.leadTimeDays,
+        productIds: supplier.products.map((item) => item.productId),
+      }));
+    }
+
+    return demoState().suppliers.filter(
+      (supplier) => supplier.organizationId === context.organization.id,
+    );
+  }
+
+  async createSupplier(input: unknown, context: AuthContext) {
+    const parsed = parseInput(supplierInputSchema, input);
+
+    if (dbMode()) {
+      const supplier = await getPrisma().supplier.create({
+        data: {
+          organizationId: context.organization.id,
+          name: parsed.name,
+          contactName: parsed.contactName || null,
+          email: parsed.email || null,
+          phone: parsed.phone || null,
+          leadTimeDays: parsed.leadTimeDays,
+        },
+      });
+      await this.audit(context, "CREATE", "Supplier", supplier.id, supplier.name);
+      return {
+        ...supplier,
+        contactName: supplier.contactName ?? undefined,
+        email: supplier.email ?? undefined,
+        phone: supplier.phone ?? undefined,
+        productIds: [],
+      };
+    }
+
+    const supplier: Supplier = {
+      ...parsed,
+      id: id("sup"),
+      organizationId: context.organization.id,
+      email: parsed.email || undefined,
+      productIds: [],
+    };
+    demoState().suppliers.unshift(supplier);
+    return supplier;
+  }
+
+  async updateSupplier(supplierId: string, input: unknown, context: AuthContext) {
+    const parsed = parseInput(supplierUpdateInputSchema, input);
+
+    if (dbMode()) {
+      const supplier = await getPrisma().supplier.findFirst({
+        where: { id: supplierId, organizationId: context.organization.id },
+      });
+
+      if (!supplier) {
+        throw new NotFoundException("Supplier not found.");
+      }
+
+      const updated = await getPrisma().supplier.update({
+        where: { id: supplier.id },
+        data: {
+          name: parsed.name,
+          contactName:
+            parsed.contactName === undefined ? undefined : parsed.contactName || null,
+          email: parsed.email === undefined ? undefined : parsed.email || null,
+          phone: parsed.phone === undefined ? undefined : parsed.phone || null,
+          leadTimeDays: parsed.leadTimeDays,
+        },
+      });
+
+      await this.audit(context, "UPDATE", "Supplier", updated.id, updated.name);
+      return {
+        ...updated,
+        contactName: updated.contactName ?? undefined,
+        email: updated.email ?? undefined,
+        phone: updated.phone ?? undefined,
+        productIds: [],
+      };
+    }
+
+    const supplier = demoState().suppliers.find(
+      (item) =>
+        item.id === supplierId && item.organizationId === context.organization.id,
+    );
+
+    if (!supplier) {
+      throw new NotFoundException("Supplier not found.");
+    }
+
+    Object.assign(supplier, {
+      ...parsed,
+      email: parsed.email === "" ? undefined : parsed.email,
+    });
+    return supplier;
+  }
+
+  async listWarehouses(context: AuthContext): Promise<Warehouse[]> {
+    if (dbMode()) {
+      const warehouses = await getPrisma().warehouse.findMany({
+        where: { organizationId: context.organization.id },
+        orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+      });
+
+      return warehouses.map(mapWarehouse);
+    }
+
+    return demoState().warehouses.filter(
+      (warehouse) => warehouse.organizationId === context.organization.id,
+    );
+  }
+
+  async listStockRows(context: AuthContext) {
+    if (dbMode()) {
+      const [products, warehouses, stockMovements] = await Promise.all([
+        this.listDatabaseProducts(context),
+        this.listWarehouses(context),
+        this.listStockMovements(context),
+      ]);
+
+      return buildStockRows(products, warehouses, stockMovements);
+    }
+
+    return this.listDemoStockRows(context);
+  }
+
+  async listCriticalStockRows(context: AuthContext) {
+    return (await this.listStockRows(context)).filter((row) => row.isCritical);
+  }
+
+  async listStockMovements(context: AuthContext): Promise<StockMovement[]> {
+    if (dbMode()) {
+      const movements = await getPrisma().stockMovement.findMany({
+        where: { organizationId: context.organization.id },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      });
+
+      return movements.map(mapStockMovement);
+    }
+
+    return demoState().stockMovements
+      .filter((movement) => movement.organizationId === context.organization.id)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async createStockMovement(input: unknown, context: AuthContext) {
+    const parsed = parseInput(stockMovementInputSchema, input);
+    await this.ensureProductExists(parsed.productId, context);
+    await this.ensureWarehouseExists(parsed.warehouseId, context);
+
+    const quantityChange =
+      parsed.type === "OUTBOUND" ? -parsed.quantity : parsed.quantity;
+
+    if (quantityChange < 0) {
+      const movements = await this.listStockMovements(context);
+      assertEnoughStockForApi(movements, parsed.warehouseId, [
+        { productId: parsed.productId, quantity: parsed.quantity },
+      ]);
+    }
+
+    if (dbMode()) {
+      const movement = await getPrisma().stockMovement.create({
+        data: {
+          organizationId: context.organization.id,
+          warehouseId: parsed.warehouseId,
+          productId: parsed.productId,
+          type: parsed.type,
+          quantityChange,
+          note: parsed.note || null,
+          createdById: context.user.id,
+        },
+      });
+      await this.audit(
+        context,
+        "CREATE",
+        "StockMovement",
+        movement.id,
+        parsed.type,
+      );
+      return mapStockMovement(movement);
+    }
+
+    const movement: StockMovement = {
+      id: id("mov"),
+      organizationId: context.organization.id,
+      warehouseId: parsed.warehouseId,
+      productId: parsed.productId,
+      type: parsed.type,
+      quantityChange,
+      note: parsed.note || undefined,
+      createdById: context.user.id,
+      createdAt: new Date().toISOString(),
+    };
+
+    demoState().stockMovements.unshift(movement);
+    return movement;
+  }
+
+  async listSalesOrders(context: AuthContext): Promise<SalesOrder[]> {
+    if (dbMode()) {
+      const orders = await getPrisma().salesOrder.findMany({
+        where: { organizationId: context.organization.id },
+        include: { lines: true },
+        orderBy: { createdAt: "desc" },
+      });
+
+      return orders.map((order) => ({
+        id: order.id,
+        organizationId: order.organizationId,
+        code: order.code,
+        customerName: order.customerName,
+        status: order.status,
+        createdAt: order.createdAt.toISOString(),
+        lines: order.lines.map((line) => ({
+          productId: line.productId,
+          quantity: line.quantity,
+        })),
+      }));
+    }
+
+    return demoState().salesOrders.filter(
+      (order) => order.organizationId === context.organization.id,
+    );
+  }
+
+  async listOpenSalesOrders(context: AuthContext) {
+    return getOpenSalesOrders(await this.listSalesOrders(context));
+  }
+
+  async createSalesOrder(input: unknown, context: AuthContext) {
+    const parsed = parseInput(salesOrderInputSchema, input);
+    await this.ensureProductExists(parsed.productId, context);
+
+    if (dbMode()) {
+      const prisma = getPrisma();
+      const count = await prisma.salesOrder.count({
+        where: { organizationId: context.organization.id },
+      });
+      const order = await prisma.salesOrder.create({
+        data: {
+          organizationId: context.organization.id,
+          code: nextCode("SO", count),
+          customerName: parsed.customerName,
+          lines: {
+            create: [{ productId: parsed.productId, quantity: parsed.quantity }],
+          },
+        },
+        include: { lines: true },
+      });
+
+      await this.audit(context, "CREATE", "SalesOrder", order.id, order.code);
+      return (await this.listSalesOrders(context)).find((item) => item.id === order.id);
+    }
+
+    const state = demoState();
+    const order: SalesOrder = {
+      id: id("so"),
+      organizationId: context.organization.id,
+      code: nextCode("SO", state.salesOrders.length),
+      customerName: parsed.customerName,
+      status: "DRAFT",
+      lines: [{ productId: parsed.productId, quantity: parsed.quantity }],
+      createdAt: new Date().toISOString(),
+    };
+    state.salesOrders.unshift(order);
+    return order;
+  }
+
+  async confirmSalesOrder(orderId: string, context: AuthContext) {
+    if (dbMode()) {
+      const prisma = getPrisma();
+      await prisma.$transaction(async (tx) => {
+        const order = await tx.salesOrder.findFirst({
+          where: {
+            id: orderId,
+            organizationId: context.organization.id,
+            status: "DRAFT",
+          },
+          include: { lines: true },
+        });
+        const warehouse = await tx.warehouse.findFirst({
+          where: { organizationId: context.organization.id, isDefault: true },
+        });
+
+        if (!order || !warehouse) {
+          throw new NotFoundException("Sales order or default warehouse not found.");
+        }
+
+        const movements = await tx.stockMovement.findMany({
+          where: {
+            organizationId: context.organization.id,
+            warehouseId: warehouse.id,
+            productId: { in: order.lines.map((line) => line.productId) },
+          },
+        });
+
+        assertEnoughStockForApi(
+          movements.map(mapStockMovement),
+          warehouse.id,
+          order.lines.map((line) => ({
+            productId: line.productId,
+            quantity: line.quantity,
+          })),
+        );
+
+        await tx.salesOrder.update({
+          where: { id: order.id },
+          data: { status: "CONFIRMED" },
+        });
+        await tx.stockMovement.createMany({
+          data: order.lines.map((line) => ({
+            organizationId: context.organization.id,
+            warehouseId: warehouse.id,
+            productId: line.productId,
+            type: "SALE",
+            quantityChange: -line.quantity,
+            reference: order.code,
+            note: "Sales order confirmed",
+            createdById: context.user.id,
+          })),
+        });
+      });
+
+      await this.audit(context, "CONFIRM", "SalesOrder", orderId, orderId);
+      return (await this.listSalesOrders(context)).find((order) => order.id === orderId);
+    }
+
+    const state = demoState();
+    const warehouse = state.warehouses.find(
+      (item) =>
+        item.organizationId === context.organization.id && item.isDefault,
+    );
+    const order = state.salesOrders.find(
+      (item) => item.id === orderId && item.organizationId === context.organization.id,
+    );
+
+    if (!warehouse || !order) {
+      throw new NotFoundException("Sales order or default warehouse not found.");
+    }
+
+    assertEnoughStockForApi(state.stockMovements, warehouse.id, order.lines);
+    order.status = "CONFIRMED";
+    order.lines.forEach((line) => {
+      state.stockMovements.unshift({
+        id: id("mov"),
+        organizationId: context.organization.id,
+        warehouseId: warehouse.id,
+        productId: line.productId,
+        type: "SALE",
+        quantityChange: -line.quantity,
+        reference: order.code,
+        note: "Sales order confirmed",
+        createdById: context.user.id,
+        createdAt: new Date().toISOString(),
+      });
+    });
+
+    return order;
+  }
+
+  async listPurchaseOrders(context: AuthContext): Promise<PurchaseOrder[]> {
+    if (dbMode()) {
+      const orders = await getPrisma().purchaseOrder.findMany({
+        where: { organizationId: context.organization.id },
+        include: { lines: true },
+        orderBy: { createdAt: "desc" },
+      });
+
+      return orders.map((order) => ({
+        id: order.id,
+        organizationId: order.organizationId,
+        supplierId: order.supplierId,
+        code: order.code,
+        status: order.status,
+        expectedDate: order.expectedDate?.toISOString(),
+        createdAt: order.createdAt.toISOString(),
+        lines: order.lines.map((line) => ({
+          productId: line.productId,
+          quantity: line.quantity,
+          receivedQuantity: line.receivedQuantity,
+        })),
+      }));
+    }
+
+    return demoState().purchaseOrders.filter(
+      (order) => order.organizationId === context.organization.id,
+    );
+  }
+
+  async listOpenPurchaseOrders(context: AuthContext) {
+    return getOpenPurchaseOrders(await this.listPurchaseOrders(context));
+  }
+
+  async createPurchaseOrder(input: unknown, context: AuthContext) {
+    const parsed = parseInput(purchaseOrderInputSchema, input);
+    await this.ensureSupplierExists(parsed.supplierId, context);
+    await this.ensureProductExists(parsed.productId, context);
+
+    if (dbMode()) {
+      const prisma = getPrisma();
+      const count = await prisma.purchaseOrder.count({
+        where: { organizationId: context.organization.id },
+      });
+      const order = await prisma.purchaseOrder.create({
+        data: {
+          organizationId: context.organization.id,
+          code: nextCode("PO", count),
+          supplierId: parsed.supplierId,
+          status: "SENT",
+          expectedDate: parsed.expectedDate ? new Date(parsed.expectedDate) : null,
+          lines: {
+            create: [{ productId: parsed.productId, quantity: parsed.quantity }],
+          },
+        },
+      });
+
+      await this.audit(context, "CREATE", "PurchaseOrder", order.id, order.code);
+      return (await this.listPurchaseOrders(context)).find(
+        (item) => item.id === order.id,
+      );
+    }
+
+    const state = demoState();
+    const order: PurchaseOrder = {
+      id: id("po"),
+      organizationId: context.organization.id,
+      code: nextCode("PO", state.purchaseOrders.length),
+      supplierId: parsed.supplierId,
+      status: "SENT",
+      expectedDate: parsed.expectedDate || undefined,
+      lines: [
+        {
+          productId: parsed.productId,
+          quantity: parsed.quantity,
+          receivedQuantity: 0,
+        },
+      ],
+      createdAt: new Date().toISOString(),
+    };
+    state.purchaseOrders.unshift(order);
+    return order;
+  }
+
+  async receivePurchaseOrder(orderId: string, context: AuthContext) {
+    if (dbMode()) {
+      const prisma = getPrisma();
+      await prisma.$transaction(async (tx) => {
+        const order = await tx.purchaseOrder.findFirst({
+          where: {
+            id: orderId,
+            organizationId: context.organization.id,
+            status: { in: ["DRAFT", "SENT", "PARTIALLY_RECEIVED"] },
+          },
+          include: { lines: true },
+        });
+        const warehouse = await tx.warehouse.findFirst({
+          where: { organizationId: context.organization.id, isDefault: true },
+        });
+
+        if (!order || !warehouse) {
+          throw new NotFoundException("Purchase order or default warehouse not found.");
+        }
+
+        const receipts: PurchaseOrderLine[] = order.lines
+          .map((line) => ({
+            productId: line.productId,
+            quantity: line.quantity,
+            receivedQuantity: line.receivedQuantity,
+          }))
+          .filter((line) => line.quantity > line.receivedQuantity);
+
+        await Promise.all(
+          order.lines.map((line) =>
+            tx.purchaseOrderLine.update({
+              where: { id: line.id },
+              data: { receivedQuantity: line.quantity },
+            }),
+          ),
+        );
+        await tx.stockMovement.createMany({
+          data: receipts.map((line) => ({
+            organizationId: context.organization.id,
+            warehouseId: warehouse.id,
+            productId: line.productId,
+            type: "PURCHASE_RECEIPT",
+            quantityChange: line.quantity - line.receivedQuantity,
+            reference: order.code,
+            note: "Purchase order received",
+            createdById: context.user.id,
+          })),
+        });
+        await tx.purchaseOrder.update({
+          where: { id: order.id },
+          data: { status: "COMPLETED" },
+        });
+      });
+
+      await this.audit(context, "RECEIVE", "PurchaseOrder", orderId, orderId);
+      return (await this.listPurchaseOrders(context)).find(
+        (order) => order.id === orderId,
+      );
+    }
+
+    const state = demoState();
+    const warehouse = state.warehouses.find(
+      (item) =>
+        item.organizationId === context.organization.id && item.isDefault,
+    );
+    const order = state.purchaseOrders.find(
+      (item) => item.id === orderId && item.organizationId === context.organization.id,
+    );
+
+    if (!warehouse || !order) {
+      throw new NotFoundException("Purchase order or default warehouse not found.");
+    }
+
+    order.lines.forEach((line) => {
+      const remaining = line.quantity - line.receivedQuantity;
+
+      if (remaining <= 0) {
+        return;
+      }
+
+      line.receivedQuantity += remaining;
+      state.stockMovements.unshift({
+        id: id("mov"),
+        organizationId: context.organization.id,
+        warehouseId: warehouse.id,
+        productId: line.productId,
+        type: "PURCHASE_RECEIPT",
+        quantityChange: remaining,
+        reference: order.code,
+        note: "Purchase order received",
+        createdById: context.user.id,
+        createdAt: new Date().toISOString(),
+      });
+    });
+    order.status = "COMPLETED";
+    return order;
+  }
+
+  private async listDatabaseProducts(context: AuthContext): Promise<Product[]> {
+    const products = await getPrisma().product.findMany({
+      where: { organizationId: context.organization.id },
+      orderBy: { name: "asc" },
+    });
+
+    return products.map(mapProduct);
+  }
+
+  private listDemoStockRows(context: AuthContext) {
+    const state = demoState();
+    return buildStockRows(
+      state.products.filter(
+        (product) => product.organizationId === context.organization.id,
+      ),
+      state.warehouses.filter(
+        (warehouse) => warehouse.organizationId === context.organization.id,
+      ),
+      state.stockMovements.filter(
+        (movement) => movement.organizationId === context.organization.id,
+      ),
+    );
+  }
+
+  private async ensureProductExists(productId: string, context: AuthContext) {
+    if (dbMode()) {
+      const product = await getPrisma().product.findFirst({
+        where: {
+          id: productId,
+          isActive: true,
+          organizationId: context.organization.id,
+        },
+        select: { id: true },
+      });
+
+      if (!product) {
+        throw new NotFoundException("Product not found.");
+      }
+
+      return;
+    }
+
+    const product = demoState().products.find(
+      (item) =>
+        item.id === productId &&
+        item.isActive &&
+        item.organizationId === context.organization.id,
+    );
+
+    if (!product) {
+      throw new NotFoundException("Product not found.");
+    }
+  }
+
+  private async ensureSupplierExists(supplierId: string, context: AuthContext) {
+    if (dbMode()) {
+      const supplier = await getPrisma().supplier.findFirst({
+        where: {
+          id: supplierId,
+          organizationId: context.organization.id,
+        },
+        select: { id: true },
+      });
+
+      if (!supplier) {
+        throw new NotFoundException("Supplier not found.");
+      }
+
+      return;
+    }
+
+    const supplier = demoState().suppliers.find(
+      (item) =>
+        item.id === supplierId && item.organizationId === context.organization.id,
+    );
+
+    if (!supplier) {
+      throw new NotFoundException("Supplier not found.");
+    }
+  }
+
+  private async ensureWarehouseExists(warehouseId: string, context: AuthContext) {
+    if (dbMode()) {
+      const warehouse = await getPrisma().warehouse.findFirst({
+        where: {
+          id: warehouseId,
+          organizationId: context.organization.id,
+        },
+        select: { id: true },
+      });
+
+      if (!warehouse) {
+        throw new NotFoundException("Warehouse not found.");
+      }
+
+      return;
+    }
+
+    const warehouse = demoState().warehouses.find(
+      (item) =>
+        item.id === warehouseId && item.organizationId === context.organization.id,
+    );
+
+    if (!warehouse) {
+      throw new NotFoundException("Warehouse not found.");
+    }
+  }
+
+  private async audit(
+    context: AuthContext,
+    action: "CREATE" | "UPDATE" | "CONFIRM" | "RECEIVE",
+    entityType: string,
+    entityId: string,
+    summary: string,
+  ) {
+    if (!dbMode()) {
+      return;
+    }
+
+    await getPrisma().auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action,
+        entityType,
+        entityId,
+        summary,
+      },
+    });
+  }
+}

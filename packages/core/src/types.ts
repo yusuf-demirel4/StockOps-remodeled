@@ -21,6 +21,13 @@ export type PurchaseOrderStatus =
   | "PARTIALLY_RECEIVED"
   | "COMPLETED"
   | "CANCELLED";
+export type WebhookSource = "SHOPIFY" | "WOOCOMMERCE";
+export type WebhookEventStatus =
+  | "PENDING"
+  | "PROCESSING"
+  | "PROCESSED"
+  | "FAILED"
+  | "IGNORED";
 
 export type Permission =
   | "manage_users"
@@ -143,6 +150,33 @@ export type Session = {
   createdAt: string;
 };
 
+export type ApiToken = {
+  id: string;
+  organizationId: string;
+  userId: string;
+  name: string;
+  tokenHash: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+  createdAt: string;
+};
+
+export type WebhookEvent = {
+  id: string;
+  organizationId: string;
+  source: WebhookSource;
+  topic: string;
+  externalId?: string;
+  dedupeKey: string;
+  status: WebhookEventStatus;
+  payload: unknown;
+  headers?: Record<string, string>;
+  error?: string;
+  attempts: number;
+  receivedAt: string;
+  processedAt?: string;
+};
+
 export type AppState = {
   organizations: Organization[];
   users: User[];
@@ -155,6 +189,8 @@ export type AppState = {
   purchaseOrders: PurchaseOrder[];
   auditLogs: AuditLog[];
   sessions: Session[];
+  apiTokens?: ApiToken[];
+  webhookEvents?: WebhookEvent[];
 };
 
 export type AuthContext = {

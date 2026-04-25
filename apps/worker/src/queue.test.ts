@@ -13,4 +13,22 @@ describe("worker queue", () => {
       jobId: job.id,
     });
   });
+
+  it("routes webhook jobs with the durable event identity", async () => {
+    const job = createJob("shopify.webhook.received", {
+      webhookEventId: "wh_123",
+      organizationId: "org_kernel_guard",
+      source: "SHOPIFY",
+      topic: "products/update",
+    });
+
+    await expect(handleJob(job)).resolves.toMatchObject({
+      status: "webhook-event-ready-for-sync",
+      jobId: job.id,
+      webhookEventId: "wh_123",
+      organizationId: "org_kernel_guard",
+      source: "SHOPIFY",
+      topic: "products/update",
+    });
+  });
 });

@@ -10,7 +10,8 @@ Bu repo artik monorepo olarak duzenlenir:
 - `apps/api`: mobil uygulama, public API ve webhook girisleri icin NestJS API iskeleti
 - `apps/worker`: webhook, satin alma onerisi, bildirim ve AI forecast gibi arka plan isleri
 - `packages/core`: domain tipleri, stok kurallari, validasyon, format ve demo veri
-- `packages/db`: Prisma schema, seed ve paylasilan database client
+- `packages/db`: Prisma schema, SQL migrations, seed ve paylasilan database client
+- `packages/queue`: memory ve BullMQ/Redis destekli job publish/worker adaptoru
 
 ## Kapsam
 
@@ -23,6 +24,10 @@ Bu repo artik monorepo olarak duzenlenir:
 - Dashboard ve kritik stok uyarilari
 - API baslangici: `GET /v1/health`, `GET /v1/inventory/products`
 - Webhook baslangici: `POST /v1/webhooks/shopify`, `POST /v1/webhooks/woocommerce`
+- API auth: Bearer token + `organizationId` tabanli tenant izolasyonu + rol bazli yetki
+- Webhook inbox: event idempotency, `WebhookEvent` kaydi ve worker job kontrati
+- OpenAPI kontrati: Swagger UI ve JSON/YAML dokuman ciktilari
+- Queue kontrati: demo icin memory driver, production icin BullMQ/Redis driver
 
 ## Gelistirme
 
@@ -49,6 +54,75 @@ npm run dev:worker
 ```
 
 API varsayilan portu `http://localhost:4000`.
+OpenAPI dokumani varsayilan olarak `http://localhost:4000/docs` adresinde,
+ham JSON ciktisi ise `http://localhost:4000/docs/openapi.json` adresinde yayinlanir.
+
+Demo API token:
+
+```txt
+stockops_demo_api_key
+```
+
+Ornek API istegi:
+
+```bash
+curl http://localhost:4000/v1/products \
+  -H "Authorization: Bearer stockops_demo_api_key"
+```
+
+Temel API rotalari:
+
+```txt
+GET    /v1/auth/me
+GET    /v1/products
+POST   /v1/products
+PATCH  /v1/products/:id
+DELETE /v1/products/:id
+GET    /v1/suppliers
+POST   /v1/suppliers
+PATCH  /v1/suppliers/:id
+GET    /v1/stock/warehouses
+GET    /v1/stock/rows
+GET    /v1/stock/alerts
+GET    /v1/stock/movements
+POST   /v1/stock/movements
+GET    /v1/sales-orders
+POST   /v1/sales-orders
+POST   /v1/sales-orders/:id/confirm
+GET    /v1/purchase-orders
+POST   /v1/purchase-orders
+POST   /v1/purchase-orders/:id/receive
+```
+
+OpenAPI ayarlari:
+
+```env
+API_DOCS_ENABLED="true"
+API_DOCS_PATH="docs"
+```
+
+Queue ayarlari:
+
+```env
+STOCKOPS_QUEUE_DRIVER="memory" # memory | bullmq
+STOCKOPS_QUEUE_NAME="stockops.jobs"
+STOCKOPS_QUEUE_CONCURRENCY="5"
+REDIS_URL="redis://localhost:6379"
+```
+
+`STOCKOPS_QUEUE_DRIVER` bos birakilirsa `REDIS_URL` varsa BullMQ,
+yoksa memory driver kullanilir. Memory driver demo ve local dogrulama icindir;
+ayri API/worker process'leri arasinda kalici is tasimak icin Redis/BullMQ kullanilmalidir.
+
+Webhook rotalari:
+
+```txt
+POST /v1/webhooks/shopify
+POST /v1/webhooks/woocommerce
+```
+
+`WEBHOOK_SHARED_SECRET` degeri bos degilse webhook isteklerinde
+`X-StockOps-Webhook-Secret` header'i zorunlu olur.
 
 ## Veritabani
 
@@ -65,14 +139,47 @@ Database mod:
 ```env
 APP_DATA_SOURCE="database"
 DATABASE_URL="postgresql://stockops:stockops@localhost:5432/stockops?schema=public"
+SHADOW_DATABASE_URL="postgresql://stockops:stockops@localhost:5432/stockops_shadow?schema=public"
+API_DEMO_TOKEN="stockops_demo_api_key"
+WEBHOOK_DEFAULT_ORGANIZATION_SLUG="kernelguard"
 ```
+
+`SHADOW_DATABASE_URL`, Prisma'nin migration drift kontrolleri ve `migrate dev`
+akisinda kullandigi izole veritabanidir. Local PostgreSQL kullanirken ana
+veritabani ile ayni yetkilere sahip ayri bir database olmalidir.
 
 Ilk database kurulumu:
 
 ```bash
-npm run prisma:push
+npm run prisma:migrate:dev
 npm run prisma:seed
 ```
+
+Production/staging migration akisi:
+
+```bash
+npm run prisma:migrate:deploy
+npm run prisma:seed
+```
+
+Migration dosyalari `packages/db/prisma/migrations` altinda versiyonlanir.
+`prisma:push` sadece hizli lokal prototipleme icindir; staging ve production icin
+`prisma:migrate:deploy` kullanilmalidir.
+
+Migration durumunu kontrol etmek icin:
+
+```bash
+npm run prisma:migrate:status
+```
+
+Migration dosyalari ile `schema.prisma` arasinda drift kontrolu icin:
+
+```bash
+npm run prisma:migrate:check
+```
+
+Bu komut PostgreSQL shadow database gerektirir; CI ortaminda
+`SHADOW_DATABASE_URL` mutlaka tanimli olmalidir.
 
 ## Dogrulama
 
@@ -82,6 +189,7 @@ npm run typecheck
 npm test
 npm run build
 npm run prisma:validate
+npm run prisma:generate
 ```
 
 ## Ekran goruntuleri

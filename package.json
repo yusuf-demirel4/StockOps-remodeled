@@ -19,6 +19,10 @@
     "test": "turbo test",
     "prisma:validate": "turbo prisma:validate --filter=@stockops/db",
     "prisma:generate": "turbo prisma:generate --filter=@stockops/db",
+    "prisma:migrate:check": "turbo prisma:migrate:check --filter=@stockops/db",
+    "prisma:migrate:dev": "turbo prisma:migrate:dev --filter=@stockops/db",
+    "prisma:migrate:deploy": "turbo prisma:migrate:deploy --filter=@stockops/db",
+    "prisma:migrate:status": "turbo prisma:migrate:status --filter=@stockops/db",
     "prisma:push": "turbo prisma:push --filter=@stockops/db",
     "prisma:seed": "turbo prisma:seed --filter=@stockops/db"
   },

@@ -11,7 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@stockops/core": "*"
+    "@stockops/core": "*",
+    "@stockops/queue": "*"
   },
   "devDependencies": {
     "@types/node": "^20",

@@ -26,6 +26,18 @@
     "prisma:generate": {
       "cache": false
     },
+    "prisma:migrate:check": {
+      "cache": false
+    },
+    "prisma:migrate:dev": {
+      "cache": false
+    },
+    "prisma:migrate:deploy": {
+      "cache": false
+    },
+    "prisma:migrate:status": {
+      "cache": false
+    },
     "prisma:push": {
       "cache": false
     },

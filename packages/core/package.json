@@ -8,8 +8,10 @@
     "./demo-data": "./src/demo-data.ts",
     "./format": "./src/format.ts",
     "./inventory": "./src/inventory.ts",
+    "./jobs": "./src/jobs.ts",
     "./password": "./src/password.ts",
     "./schemas": "./src/schemas.ts",
+    "./tokens": "./src/tokens.ts",
     "./types": "./src/types.ts"
   },
   "scripts": {

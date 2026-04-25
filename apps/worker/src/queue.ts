@@ -1,9 +1,10 @@
-import type { JobName, QueueJob } from "./jobs";
+import type { JobName, QueueJob } from "@stockops/core/jobs";
+import { handleWebhookReceived } from "./webhook-processor";
 
-export function createJob<TPayload>(
-  name: JobName,
-  payload: TPayload,
-): QueueJob<TPayload> {
+export function createJob<TName extends JobName>(
+  name: TName,
+  payload: QueueJob<TName>["payload"],
+): QueueJob<TName> {
   return {
     id: `job_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     name,
@@ -16,8 +17,11 @@ export function createJob<TPayload>(
 export async function handleJob(job: QueueJob) {
   switch (job.name) {
     case "shopify.webhook.received":
+      return handleWebhookReceived(job as QueueJob<"shopify.webhook.received">);
     case "woocommerce.webhook.received":
-      return { status: "queued-for-sync", jobId: job.id };
+      return handleWebhookReceived(
+        job as QueueJob<"woocommerce.webhook.received">,
+      );
     case "inventory.reorder.evaluate":
       return { status: "reorder-evaluated", jobId: job.id };
     case "notifications.low-stock.dispatch":

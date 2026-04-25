@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "@stockops/core/password";
+import { hashToken } from "@stockops/core/tokens";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -41,6 +42,24 @@ async function main() {
       role: "Owner",
     },
     update: { role: "Owner" },
+  });
+
+  await prisma.apiToken.upsert({
+    where: {
+      tokenHash: hashToken(process.env.API_DEMO_TOKEN ?? "stockops_demo_api_key"),
+    },
+    create: {
+      organizationId: organization.id,
+      userId: user.id,
+      name: "Demo API token",
+      tokenHash: hashToken(process.env.API_DEMO_TOKEN ?? "stockops_demo_api_key"),
+    },
+    update: {
+      organizationId: organization.id,
+      userId: user.id,
+      name: "Demo API token",
+      revokedAt: null,
+    },
   });
 
   const mainWarehouse = await prisma.warehouse.upsert({

@@ -3,6 +3,7 @@ import { defineConfig } from "prisma/config";
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
+    shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL,
     url:
       process.env.DATABASE_URL ??
       "postgresql://stockops:stockops@localhost:5432/stockops?schema=public",

@@ -10,6 +10,11 @@ export const productInputSchema = z.object({
   minimumStock: z.coerce.number().int().min(0),
 });
 
+export const productUpdateInputSchema = productInputSchema.partial().refine(
+  (value) => Object.keys(value).length > 0,
+  "At least one field is required.",
+);
+
 export const stockMovementInputSchema = z.object({
   productId: z.string().min(1),
   warehouseId: z.string().min(1),
@@ -26,6 +31,11 @@ export const supplierInputSchema = z.object({
   leadTimeDays: z.coerce.number().int().min(1).max(90),
 });
 
+export const supplierUpdateInputSchema = supplierInputSchema.partial().refine(
+  (value) => Object.keys(value).length > 0,
+  "At least one field is required.",
+);
+
 export const salesOrderInputSchema = z.object({
   customerName: z.string().trim().min(2),
   productId: z.string().min(1),
@@ -38,6 +48,15 @@ export const purchaseOrderInputSchema = z.object({
   quantity: positiveInt,
   expectedDate: z.string().trim().optional(),
 });
+
+export const webhookSourceSchema = z.enum(["SHOPIFY", "WOOCOMMERCE"]);
+export const webhookEventStatusSchema = z.enum([
+  "PENDING",
+  "PROCESSING",
+  "PROCESSED",
+  "FAILED",
+  "IGNORED",
+]);
 
 export const signInInputSchema = z.object({
   email: z.string().trim().email(),
