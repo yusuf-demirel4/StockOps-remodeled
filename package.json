@@ -1,46 +1,28 @@
 {
-  "name": "stockops-app",
+  "name": "stockops",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@11.12.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "prisma:validate": "prisma validate",
-    "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push",
-    "prisma:seed": "prisma db seed"
-  },
-  "dependencies": {
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
-    "clsx": "^2.1.1",
-    "lucide-react": "^1.11.0",
-    "next": "16.2.4",
-    "pg": "^8.20.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "zod": "^4.3.6"
+    "dev": "turbo dev --filter=@stockops/web",
+    "dev:all": "turbo dev --parallel",
+    "dev:web": "turbo dev --filter=@stockops/web",
+    "dev:api": "turbo dev --filter=@stockops/api",
+    "dev:worker": "turbo dev --filter=@stockops/worker",
+    "build": "turbo build",
+    "lint": "turbo lint --filter=@stockops/web",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "prisma:validate": "turbo prisma:validate --filter=@stockops/db",
+    "prisma:generate": "turbo prisma:generate --filter=@stockops/db",
+    "prisma:push": "turbo prisma:push --filter=@stockops/db",
+    "prisma:seed": "turbo prisma:seed --filter=@stockops/db"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
-    "@types/node": "^20",
-    "@types/pg": "^8.20.0",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.4",
-    "jsdom": "^29.0.2",
-    "prisma": "^7.8.0",
-    "tailwindcss": "^4",
-    "tsx": "^4.21.0",
-    "typescript": "^5",
-    "vitest": "^4.1.5"
+    "turbo": "^2.8.0"
   }
 }

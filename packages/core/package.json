@@ -1,0 +1,28 @@
+{
+  "name": "@stockops/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./demo-data": "./src/demo-data.ts",
+    "./format": "./src/format.ts",
+    "./inventory": "./src/inventory.ts",
+    "./password": "./src/password.ts",
+    "./schemas": "./src/schemas.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5",
+    "vitest": "^4.1.5"
+  }
+}
