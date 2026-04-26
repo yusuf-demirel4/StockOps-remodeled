@@ -2,8 +2,12 @@
 
 import { Plus } from "lucide-react";
 import { ActionForm, submitClass } from "@/components/action-form";
+import { BarcodeProductPicker } from "@/components/barcode-product-picker";
 import { inputClass, selectClass } from "@/components/ui";
-import { createStockMovementAction } from "@/lib/actions";
+import {
+  createStockMovementAction,
+  createStockTransferAction,
+} from "@/lib/actions";
 import type { Product, Warehouse } from "@stockops/core/types";
 
 export function StockMovementForm({
@@ -27,16 +31,7 @@ export function StockMovementForm({
               placeholder="USB okuyucu ile okut"
             />
           </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            Ürün
-            <select className={selectClass} name="productId" required>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.sku} - {product.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <BarcodeProductPicker products={products} />
           <label className="grid gap-1.5 text-sm font-medium">
             Depo
             <select className={selectClass} name="warehouseId" required>
@@ -76,6 +71,73 @@ export function StockMovementForm({
           >
             <Plus aria-hidden="true" className="size-4" />
             {pending ? "Kaydediliyor" : "Hareket kaydet"}
+          </button>
+        </>
+      )}
+    </ActionForm>
+  );
+}
+
+export function StockTransferForm({
+  products,
+  warehouses,
+}: {
+  products: Product[];
+  warehouses: Warehouse[];
+}) {
+  const isDisabled = products.length === 0 || warehouses.length < 2;
+
+  return (
+    <ActionForm action={createStockTransferAction}>
+      {(pending) => (
+        <>
+          <BarcodeProductPicker products={products} />
+          <label className="grid gap-1.5 text-sm font-medium">
+            Kaynak depo
+            <select className={selectClass} name="sourceWarehouseId" required>
+              {warehouses.map((warehouse) => (
+                <option key={warehouse.id} value={warehouse.id}>
+                  {warehouse.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium">
+            Hedef depo
+            <select
+              className={selectClass}
+              defaultValue={warehouses[1]?.id}
+              name="destinationWarehouseId"
+              required
+            >
+              {warehouses.map((warehouse) => (
+                <option key={warehouse.id} value={warehouse.id}>
+                  {warehouse.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium">
+            Miktar
+            <input
+              className={inputClass}
+              min="1"
+              name="quantity"
+              required
+              type="number"
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium">
+            Not
+            <input className={inputClass} name="note" />
+          </label>
+          <button
+            className={submitClass(pending)}
+            disabled={pending || isDisabled}
+            type="submit"
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            {pending ? "Aktarılıyor" : "Transfer oluştur"}
           </button>
         </>
       )}

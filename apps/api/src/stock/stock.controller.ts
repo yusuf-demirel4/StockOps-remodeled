@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Inject, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import {
   ApiBody,
   ApiCreatedResponse,
@@ -22,7 +31,11 @@ import {
   stockMovementCreateBodySchema,
   stockMovementResponseSchema,
   stockRowSchema,
+  stockTransferCreateBodySchema,
+  stockTransferResponseSchema,
+  warehouseCreateBodySchema,
   warehouseSchema,
+  warehouseUpdateBodySchema,
 } from "../openapi/schemas";
 
 @ApiTags("Stock")
@@ -41,6 +54,30 @@ export class StockController {
   @ApiOkResponse({ schema: arrayOf(warehouseSchema) })
   warehouses(@CurrentAuth() context: AuthContext) {
     return this.stockOps.listWarehouses(context);
+  }
+
+  @Post("warehouses")
+  @RequirePermissions("manage_stock")
+  @ApiOperation({ summary: "Create a warehouse for the organization." })
+  @ApiBody({ schema: warehouseCreateBodySchema })
+  @ApiCreatedResponse({ schema: warehouseSchema })
+  @ApiValidationError()
+  createWarehouse(@CurrentAuth() context: AuthContext, @Body() body: unknown) {
+    return this.stockOps.createWarehouse(body, context);
+  }
+
+  @Patch("warehouses/:warehouseId")
+  @RequirePermissions("manage_stock")
+  @ApiOperation({ summary: "Update a warehouse or make it the default." })
+  @ApiBody({ schema: warehouseUpdateBodySchema })
+  @ApiOkResponse({ schema: warehouseSchema })
+  @ApiValidationError()
+  updateWarehouse(
+    @CurrentAuth() context: AuthContext,
+    @Param("warehouseId") warehouseId: string,
+    @Body() body: unknown,
+  ) {
+    return this.stockOps.updateWarehouse(warehouseId, body, context);
   }
 
   @Get("rows")
@@ -75,5 +112,15 @@ export class StockController {
   @ApiValidationError()
   createMovement(@CurrentAuth() context: AuthContext, @Body() body: unknown) {
     return this.stockOps.createStockMovement(body, context);
+  }
+
+  @Post("transfers")
+  @RequirePermissions("manage_stock")
+  @ApiOperation({ summary: "Transfer stock between warehouses." })
+  @ApiBody({ schema: stockTransferCreateBodySchema })
+  @ApiCreatedResponse({ schema: stockTransferResponseSchema })
+  @ApiValidationError()
+  createTransfer(@CurrentAuth() context: AuthContext, @Body() body: unknown) {
+    return this.stockOps.createStockTransfer(body, context);
   }
 }

@@ -1,5 +1,8 @@
 import { AppShell } from "@/components/app-shell";
-import { StockMovementForm } from "@/components/inventory-form";
+import {
+  StockMovementForm,
+  StockTransferForm,
+} from "@/components/inventory-form";
 import { Panel, StatusBadge } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
 import { getAppSnapshot } from "@/lib/repository";
@@ -16,22 +19,32 @@ export const dynamic = "force-dynamic";
 export default async function InventoryPage() {
   const context = await requireAuth();
   const snapshot = await getAppSnapshot(context);
+  const activeProducts = snapshot.products.filter((product) => product.isActive);
 
   return (
     <AppShell
-      description="Giriş, çıkış, düzeltme ve hareket geçmişi."
+      description="Giriş, çıkış, transfer, düzeltme ve hareket geçmişi."
       organizationName={snapshot.organization.name}
       role={snapshot.role}
       title="Stok"
       userName={snapshot.user.name}
     >
       <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
-        <Panel title="Stok hareketi">
-          <StockMovementForm
-            products={snapshot.products.filter((product) => product.isActive)}
-            warehouses={snapshot.warehouses}
-          />
-        </Panel>
+        <div className="grid gap-6">
+          <Panel title="Stok hareketi">
+            <StockMovementForm
+              products={activeProducts}
+              warehouses={snapshot.warehouses}
+            />
+          </Panel>
+
+          <Panel title="Depolar arası transfer">
+            <StockTransferForm
+              products={activeProducts}
+              warehouses={snapshot.warehouses}
+            />
+          </Panel>
+        </div>
 
         <div className="grid gap-6">
           <Panel title="Mevcut stok">

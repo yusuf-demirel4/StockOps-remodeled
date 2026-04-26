@@ -1,6 +1,21 @@
 import { z } from "zod";
 
 const positiveInt = z.coerce.number().int().positive();
+const optionalBoolean = z.preprocess((value) => {
+  if (value === "" || value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  return value;
+}, z.boolean().optional());
 
 export const productInputSchema = z.object({
   sku: z.string().trim().min(2),
@@ -22,6 +37,38 @@ export const stockMovementInputSchema = z.object({
   quantity: positiveInt,
   note: z.string().trim().optional(),
 });
+
+export const stockTransferInputSchema = z
+  .object({
+    productId: z.string().min(1),
+    sourceWarehouseId: z.string().min(1),
+    destinationWarehouseId: z.string().min(1),
+    quantity: positiveInt,
+    note: z.string().trim().optional(),
+  })
+  .refine(
+    (value) => value.sourceWarehouseId !== value.destinationWarehouseId,
+    {
+      message: "Source and destination warehouses must be different.",
+      path: ["destinationWarehouseId"],
+    },
+  );
+
+export const warehouseInputSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .min(2)
+    .max(16)
+    .transform((value) => value.toUpperCase()),
+  name: z.string().trim().min(2).max(80),
+  isDefault: optionalBoolean,
+});
+
+export const warehouseUpdateInputSchema = warehouseInputSchema.partial().refine(
+  (value) => Object.keys(value).length > 0,
+  "At least one field is required.",
+);
 
 export const supplierInputSchema = z.object({
   name: z.string().trim().min(2),

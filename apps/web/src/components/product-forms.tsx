@@ -3,6 +3,7 @@
 import { clsx } from "clsx";
 import { Check, Pencil, Plus, Power } from "lucide-react";
 import { ActionForm, submitClass } from "@/components/action-form";
+import { BarcodeValueInput } from "@/components/barcode-value-input";
 import { inputClass, subtleButtonClass } from "@/components/ui";
 import {
   createProductAction,
@@ -24,10 +25,7 @@ export function ProductCreateForm() {
             Ürün adı
             <input className={inputClass} name="name" required />
           </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            Barkod
-            <input className={inputClass} name="barcode" />
-          </label>
+          <BarcodeValueInput />
           <label className="grid gap-1.5 text-sm font-medium">
             Kategori
             <input className={inputClass} name="category" required />
@@ -87,14 +85,7 @@ function ProductUpdateForm({ product }: { product: Product }) {
                 required
               />
             </label>
-            <label className="grid gap-1.5 text-sm font-medium">
-              Barkod
-              <input
-                className={inputClass}
-                defaultValue={product.barcode ?? ""}
-                name="barcode"
-              />
-            </label>
+            <BarcodeValueInput defaultValue={product.barcode ?? ""} />
             <label className="grid gap-1.5 text-sm font-medium">
               Ürün adı
               <input

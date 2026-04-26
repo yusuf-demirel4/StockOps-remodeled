@@ -10,11 +10,14 @@ import {
   createPurchaseOrder,
   createSalesOrder,
   createStockMovement,
+  createStockTransfer,
   createSupplier,
+  createWarehouse,
   receivePurchaseOrder,
   setProductActive,
   updateProduct,
   updateSupplier,
+  updateWarehouse,
 } from "@/lib/repository";
 import { signInInputSchema } from "@stockops/core/schemas";
 import type { AuthContext } from "@stockops/core/types";
@@ -185,6 +188,57 @@ export async function createStockMovementAction(
         type: value(formData, "type"),
         quantity: value(formData, "quantity"),
         note: value(formData, "note"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function createStockTransferAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Stok transferi oluşturuldu.", (context) =>
+    createStockTransfer(
+      {
+        productId: value(formData, "productId"),
+        sourceWarehouseId: value(formData, "sourceWarehouseId"),
+        destinationWarehouseId: value(formData, "destinationWarehouseId"),
+        quantity: value(formData, "quantity"),
+        note: value(formData, "note"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function createWarehouseAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Depo eklendi.", (context) =>
+    createWarehouse(
+      {
+        code: value(formData, "code"),
+        name: value(formData, "name"),
+        isDefault: value(formData, "isDefault") === "true",
+      },
+      context,
+    ),
+  );
+}
+
+export async function updateWarehouseAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Depo güncellendi.", (context) =>
+    updateWarehouse(
+      value(formData, "warehouseId"),
+      {
+        code: value(formData, "code"),
+        name: value(formData, "name"),
+        isDefault: value(formData, "isDefault") === "true" ? true : undefined,
       },
       context,
     ),

@@ -2,6 +2,7 @@
 
 import { Check, Plus, Truck } from "lucide-react";
 import { ActionForm, submitClass } from "@/components/action-form";
+import { BarcodeProductPicker } from "@/components/barcode-product-picker";
 import { inputClass, selectClass } from "@/components/ui";
 import {
   confirmSalesOrderAction,
@@ -20,16 +21,7 @@ export function SalesOrderForm({ products }: { products: Product[] }) {
             Müşteri
             <input className={inputClass} name="customerName" required />
           </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            Ürün
-            <select className={selectClass} name="productId" required>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.sku} - {product.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <BarcodeProductPicker products={products} />
           <label className="grid gap-1.5 text-sm font-medium">
             Miktar
             <input
@@ -77,16 +69,7 @@ export function PurchaseOrderForm({
               ))}
             </select>
           </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            Ürün
-            <select className={selectClass} name="productId" required>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.sku} - {product.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <BarcodeProductPicker products={products} />
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-1.5 text-sm font-medium">
               Miktar

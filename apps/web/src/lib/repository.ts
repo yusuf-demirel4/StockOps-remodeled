@@ -6,12 +6,15 @@ import {
   createPurchaseOrder as createDemoPurchaseOrder,
   createSalesOrder as createDemoSalesOrder,
   createStockMovement as createDemoStockMovement,
+  createStockTransfer as createDemoStockTransfer,
   createSupplier as createDemoSupplier,
+  createWarehouse as createDemoWarehouse,
   getDemoSnapshot,
   receivePurchaseOrder as receiveDemoPurchaseOrder,
   setProductActive as setDemoProductActive,
   updateProduct as updateDemoProduct,
   updateSupplier as updateDemoSupplier,
+  updateWarehouse as updateDemoWarehouse,
 } from "@/lib/demo-store";
 import { getPrisma } from "@/lib/prisma";
 import {
@@ -20,8 +23,11 @@ import {
   purchaseOrderInputSchema,
   salesOrderInputSchema,
   stockMovementInputSchema,
+  stockTransferInputSchema,
   supplierInputSchema,
   supplierUpdateInputSchema,
+  warehouseInputSchema,
+  warehouseUpdateInputSchema,
 } from "@stockops/core/schemas";
 import {
   assertEnoughStock,
@@ -427,6 +433,221 @@ export async function createStockMovement(input: unknown, context: AuthContext) 
     movement.id,
     `${parsed.type} hareketi kaydedildi`,
   );
+}
+
+export async function createStockTransfer(input: unknown, context: AuthContext) {
+  if (!dbMode()) {
+    return createDemoStockTransfer(input, context);
+  }
+
+  ensurePermission(context, "manage_stock");
+  const parsed = stockTransferInputSchema.parse(input);
+  const prisma = getPrisma();
+
+  const [product, sourceWarehouse, destinationWarehouse] = await Promise.all([
+    prisma.product.findFirst({
+      where: {
+        id: parsed.productId,
+        isActive: true,
+        organizationId: context.organization.id,
+      },
+    }),
+    prisma.warehouse.findFirst({
+      where: {
+        id: parsed.sourceWarehouseId,
+        organizationId: context.organization.id,
+      },
+    }),
+    prisma.warehouse.findFirst({
+      where: {
+        id: parsed.destinationWarehouseId,
+        organizationId: context.organization.id,
+      },
+    }),
+  ]);
+
+  if (!product || !sourceWarehouse || !destinationWarehouse) {
+    throw new Error("Urun veya depo bulunamadi.");
+  }
+
+  const sourceMovements = await prisma.stockMovement.findMany({
+    where: {
+      organizationId: context.organization.id,
+      productId: parsed.productId,
+      warehouseId: parsed.sourceWarehouseId,
+    },
+  });
+
+  assertEnoughStock(
+    sourceMovements.map(mapStockMovement),
+    parsed.sourceWarehouseId,
+    [{ productId: parsed.productId, quantity: parsed.quantity }],
+  );
+
+  const transferMovementCount = await prisma.stockMovement.count({
+    where: { organizationId: context.organization.id, type: "TRANSFER" },
+  });
+  const reference = nextCode("TR", Math.floor(transferMovementCount / 2));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.stockMovement.createMany({
+      data: [
+        {
+          organizationId: context.organization.id,
+          warehouseId: parsed.sourceWarehouseId,
+          productId: parsed.productId,
+          type: "TRANSFER",
+          quantityChange: -parsed.quantity,
+          reference,
+          note: parsed.note || `Transfer to ${destinationWarehouse.name}`,
+          createdById: context.user.id,
+        },
+        {
+          organizationId: context.organization.id,
+          warehouseId: parsed.destinationWarehouseId,
+          productId: parsed.productId,
+          type: "TRANSFER",
+          quantityChange: parsed.quantity,
+          reference,
+          note: parsed.note || `Transfer from ${sourceWarehouse.name}`,
+          createdById: context.user.id,
+        },
+      ],
+    });
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action: "CREATE",
+        entityType: "StockTransfer",
+        entityId: reference,
+        summary: `${reference} stok transferi olusturuldu`,
+      },
+    });
+  });
+
+  const movements = await prisma.stockMovement.findMany({
+    where: { organizationId: context.organization.id, reference },
+    orderBy: { quantityChange: "asc" },
+  });
+
+  return { movements: movements.map(mapStockMovement), reference };
+}
+
+export async function createWarehouse(input: unknown, context: AuthContext) {
+  if (!dbMode()) {
+    return createDemoWarehouse(input, context);
+  }
+
+  ensurePermission(context, "manage_stock");
+  const parsed = warehouseInputSchema.parse(input);
+  const prisma = getPrisma();
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const warehouseCount = await tx.warehouse.count({
+        where: { organizationId: context.organization.id },
+      });
+      const isDefault = parsed.isDefault === true || warehouseCount === 0;
+
+      if (isDefault) {
+        await tx.warehouse.updateMany({
+          where: { organizationId: context.organization.id, isDefault: true },
+          data: { isDefault: false },
+        });
+      }
+
+      const warehouse = await tx.warehouse.create({
+        data: {
+          organizationId: context.organization.id,
+          code: parsed.code,
+          name: parsed.name,
+          isDefault,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: context.organization.id,
+          actorId: context.user.id,
+          action: "CREATE",
+          entityType: "Warehouse",
+          entityId: warehouse.id,
+          summary: `${warehouse.code} deposu olusturuldu`,
+        },
+      });
+
+      return mapWarehouse(warehouse);
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throw new Error("Bu depo kodu zaten kayitli.");
+    }
+
+    throw error;
+  }
+}
+
+export async function updateWarehouse(
+  warehouseId: string,
+  input: unknown,
+  context: AuthContext,
+) {
+  if (!dbMode()) {
+    return updateDemoWarehouse(warehouseId, input, context);
+  }
+
+  ensureRecordId(warehouseId, "Depo");
+  ensurePermission(context, "manage_stock");
+  const parsed = warehouseUpdateInputSchema.parse(input);
+  const prisma = getPrisma();
+
+  const warehouse = await prisma.warehouse.findFirst({
+    where: { id: warehouseId, organizationId: context.organization.id },
+  });
+
+  if (!warehouse) {
+    throw new Error("Depo bulunamadi.");
+  }
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      if (parsed.isDefault === true) {
+        await tx.warehouse.updateMany({
+          where: { organizationId: context.organization.id, isDefault: true },
+          data: { isDefault: false },
+        });
+      }
+
+      const updated = await tx.warehouse.update({
+        where: { id: warehouse.id },
+        data: {
+          code: parsed.code,
+          name: parsed.name,
+          isDefault: parsed.isDefault === true ? true : undefined,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: context.organization.id,
+          actorId: context.user.id,
+          action: "UPDATE",
+          entityType: "Warehouse",
+          entityId: updated.id,
+          summary: `${updated.code} deposu guncellendi`,
+        },
+      });
+
+      return mapWarehouse(updated);
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throw new Error("Bu depo kodu zaten kayitli.");
+    }
+
+    throw error;
+  }
 }
 
 export async function createSupplier(input: unknown, context: AuthContext) {

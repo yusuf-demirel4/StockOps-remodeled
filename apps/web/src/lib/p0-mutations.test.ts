@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   createProduct,
+  createStockTransfer,
   createSupplier,
+  createWarehouse,
   getAppSnapshot,
   setProductActive,
   updateProduct,
   updateSupplier,
+  updateWarehouse,
 } from "@/lib/demo-store";
 import type { AuthContext } from "@stockops/core/types";
 
@@ -99,5 +102,86 @@ describe("P0 demo mutations", () => {
     expect(() =>
       updateSupplier(supplier.id, { name: "TechLine Tedarik" }, context),
     ).toThrow(/tedarikci/);
+  });
+
+  it("transfers stock between warehouses through paired movements", () => {
+    const context = demoContext();
+    const transfer = createStockTransfer(
+      {
+        destinationWarehouseId: "wh_showroom",
+        productId: "prd_kbd_mx",
+        quantity: "5",
+        sourceWarehouseId: "wh_main",
+      },
+      context,
+    );
+
+    expect(transfer.reference).toMatch(/^TR-/);
+    expect(transfer.movements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          productId: "prd_kbd_mx",
+          quantityChange: -5,
+          warehouseId: "wh_main",
+        }),
+        expect.objectContaining({
+          productId: "prd_kbd_mx",
+          quantityChange: 5,
+          warehouseId: "wh_showroom",
+        }),
+      ]),
+    );
+    expect(() =>
+      createStockTransfer(
+        {
+          destinationWarehouseId: "wh_main",
+          productId: "prd_monitor_27",
+          quantity: "1",
+          sourceWarehouseId: "wh_showroom",
+        },
+        context,
+      ),
+    ).toThrow(/Insufficient stock/);
+  });
+
+  it("creates warehouses and keeps one default warehouse", () => {
+    const context = demoContext();
+    const suffix = Math.random().toString(16).slice(2, 8).toUpperCase();
+    const warehouse = createWarehouse(
+      {
+        code: `W${suffix}`,
+        name: "West Hub",
+      },
+      context,
+    );
+
+    expect(warehouse).toMatchObject({
+      code: `W${suffix}`,
+      isDefault: false,
+      name: "West Hub",
+    });
+
+    const updated = updateWarehouse(
+      warehouse.id,
+      {
+        code: `W${suffix}A`,
+        isDefault: true,
+        name: "West Hub A",
+      },
+      context,
+    );
+    const snapshot = getAppSnapshot();
+
+    expect(updated).toMatchObject({
+      code: `W${suffix}A`,
+      isDefault: true,
+      name: "West Hub A",
+    });
+    expect(
+      snapshot.warehouses.filter((item) => item.isDefault).map((item) => item.id),
+    ).toEqual([warehouse.id]);
+    expect(() =>
+      createWarehouse({ code: "MAIN", name: "Duplicate Main" }, context),
+    ).toThrow(/depo kodu/);
   });
 });

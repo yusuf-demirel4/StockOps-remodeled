@@ -5,11 +5,14 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./barcode": "./src/barcode.ts",
+    "./dashboard": "./src/dashboard.ts",
     "./demo-data": "./src/demo-data.ts",
     "./format": "./src/format.ts",
     "./inventory": "./src/inventory.ts",
     "./jobs": "./src/jobs.ts",
     "./password": "./src/password.ts",
+    "./purchase-recommendations": "./src/purchase-recommendations.ts",
     "./schemas": "./src/schemas.ts",
     "./tokens": "./src/tokens.ts",
     "./types": "./src/types.ts"

@@ -13,8 +13,11 @@ import {
   purchaseOrderInputSchema,
   salesOrderInputSchema,
   stockMovementInputSchema,
+  stockTransferInputSchema,
   supplierInputSchema,
   supplierUpdateInputSchema,
+  warehouseInputSchema,
+  warehouseUpdateInputSchema,
 } from "@stockops/core/schemas";
 import { verifyPassword } from "@stockops/core/password";
 import type {
@@ -28,6 +31,7 @@ import type {
   Session,
   StockMovement,
   Supplier,
+  Warehouse,
 } from "@stockops/core/types";
 
 const globalForStore = globalThis as typeof globalThis & {
@@ -403,6 +407,201 @@ export function createStockMovement(
   });
 
   return movement;
+}
+
+export function createStockTransfer(input: unknown, context?: AuthContext) {
+  const parsed = stockTransferInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(membership.role, "manage_stock")) {
+    throw new Error("Bu rol stok transferi olusturamaz.");
+  }
+
+  const product = appState.products.find(
+    (item) =>
+      item.id === parsed.productId &&
+      item.isActive &&
+      item.organizationId === organization.id,
+  );
+  const sourceWarehouse = appState.warehouses.find(
+    (item) =>
+      item.id === parsed.sourceWarehouseId &&
+      item.organizationId === organization.id,
+  );
+  const destinationWarehouse = appState.warehouses.find(
+    (item) =>
+      item.id === parsed.destinationWarehouseId &&
+      item.organizationId === organization.id,
+  );
+
+  if (!product || !sourceWarehouse || !destinationWarehouse) {
+    throw new Error("Urun veya depo bulunamadi.");
+  }
+
+  assertEnoughStock(appState.stockMovements, parsed.sourceWarehouseId, [
+    { productId: parsed.productId, quantity: parsed.quantity },
+  ]);
+
+  const reference = code(
+    "TR",
+    appState.stockMovements.filter((movement) => movement.type === "TRANSFER")
+      .length / 2,
+  );
+  const createdAt = new Date().toISOString();
+  const movements: StockMovement[] = [
+    {
+      id: id("mov"),
+      organizationId: organization.id,
+      warehouseId: parsed.sourceWarehouseId,
+      productId: parsed.productId,
+      type: "TRANSFER",
+      quantityChange: -parsed.quantity,
+      reference,
+      note: parsed.note || `Transfer to ${destinationWarehouse.name}`,
+      createdById: user.id,
+      createdAt,
+    },
+    {
+      id: id("mov"),
+      organizationId: organization.id,
+      warehouseId: parsed.destinationWarehouseId,
+      productId: parsed.productId,
+      type: "TRANSFER",
+      quantityChange: parsed.quantity,
+      reference,
+      note: parsed.note || `Transfer from ${sourceWarehouse.name}`,
+      createdById: user.id,
+      createdAt,
+    },
+  ];
+
+  appState.stockMovements.unshift(...movements);
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "CREATE",
+    entityType: "StockTransfer",
+    entityId: reference,
+    summary: `${reference} stok transferi olusturuldu`,
+  });
+
+  return { movements, reference };
+}
+
+export function createWarehouse(input: unknown, context?: AuthContext) {
+  const parsed = warehouseInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(membership.role, "manage_stock")) {
+    throw new Error("Bu rol depo olusturamaz.");
+  }
+
+  const organizationWarehouses = appState.warehouses.filter(
+    (warehouse) => warehouse.organizationId === organization.id,
+  );
+  const exists = organizationWarehouses.some(
+    (warehouse) => warehouse.code === parsed.code,
+  );
+
+  if (exists) {
+    throw new Error("Bu depo kodu zaten kayitli.");
+  }
+
+  const isDefault =
+    parsed.isDefault === true || organizationWarehouses.length === 0;
+
+  if (isDefault) {
+    organizationWarehouses.forEach((warehouse) => {
+      warehouse.isDefault = false;
+    });
+  }
+
+  const warehouse: Warehouse = {
+    id: id("wh"),
+    organizationId: organization.id,
+    code: parsed.code,
+    name: parsed.name,
+    isDefault,
+  };
+
+  appState.warehouses.push(warehouse);
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "CREATE",
+    entityType: "Warehouse",
+    entityId: warehouse.id,
+    summary: `${warehouse.code} deposu olusturuldu`,
+  });
+
+  return warehouse;
+}
+
+export function updateWarehouse(
+  warehouseId: string,
+  input: unknown,
+  context?: AuthContext,
+) {
+  const parsed = warehouseUpdateInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!warehouseId) {
+    throw new Error("Depo bulunamadi.");
+  }
+
+  if (!can(membership.role, "manage_stock")) {
+    throw new Error("Bu rol depo yonetemez.");
+  }
+
+  const organizationWarehouses = appState.warehouses.filter(
+    (warehouse) => warehouse.organizationId === organization.id,
+  );
+  const warehouse = organizationWarehouses.find(
+    (item) => item.id === warehouseId,
+  );
+
+  if (!warehouse) {
+    throw new Error("Depo bulunamadi.");
+  }
+
+  if (
+    parsed.code &&
+    organizationWarehouses.some(
+      (item) => item.id !== warehouse.id && item.code === parsed.code,
+    )
+  ) {
+    throw new Error("Bu depo kodu zaten kayitli.");
+  }
+
+  if (parsed.isDefault === true) {
+    organizationWarehouses.forEach((item) => {
+      item.isDefault = item.id === warehouse.id;
+    });
+  }
+
+  Object.assign(warehouse, {
+    code: parsed.code ?? warehouse.code,
+    name: parsed.name ?? warehouse.name,
+  });
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "UPDATE",
+    entityType: "Warehouse",
+    entityId: warehouse.id,
+    summary: `${warehouse.code} deposu guncellendi`,
+  });
+
+  return warehouse;
 }
 
 export function createSupplier(input: unknown, context?: AuthContext) {

@@ -195,6 +195,24 @@ export const warehouseSchema: SchemaObject = {
   },
 };
 
+export const warehouseCreateBodySchema: SchemaObject = {
+  type: "object",
+  additionalProperties: false,
+  required: ["code", "name"],
+  properties: {
+    code: { type: "string", minLength: 2, maxLength: 16, example: "WEST" },
+    name: { type: "string", minLength: 2, maxLength: 80, example: "West Hub" },
+    isDefault: { type: "boolean", example: false },
+  },
+};
+
+export const warehouseUpdateBodySchema: SchemaObject = {
+  type: "object",
+  additionalProperties: false,
+  minProperties: 1,
+  properties: warehouseCreateBodySchema.properties,
+};
+
 export const stockMovementResponseSchema: SchemaObject = {
   type: "object",
   required: [
@@ -245,6 +263,38 @@ export const stockMovementCreateBodySchema: SchemaObject = {
     },
     quantity: { type: "integer", minimum: 1, example: 20 },
     note: { type: "string", example: "Cycle count adjustment" },
+  },
+};
+
+export const stockTransferCreateBodySchema: SchemaObject = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "productId",
+    "sourceWarehouseId",
+    "destinationWarehouseId",
+    "quantity",
+  ],
+  properties: {
+    productId: id("prd_001"),
+    sourceWarehouseId: id("wh_main"),
+    destinationWarehouseId: id("wh_showroom"),
+    quantity: { type: "integer", minimum: 1, example: 5 },
+    note: { type: "string", example: "Move stock to showroom" },
+  },
+};
+
+export const stockTransferResponseSchema: SchemaObject = {
+  type: "object",
+  required: ["reference", "movements"],
+  properties: {
+    reference: { type: "string", example: "TR-1001" },
+    movements: {
+      type: "array",
+      minItems: 2,
+      maxItems: 2,
+      items: stockMovementResponseSchema,
+    },
   },
 };
 

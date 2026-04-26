@@ -143,6 +143,144 @@ describe("StockOps API P0 flows", () => {
     });
   });
 
+  it("transfers stock between warehouses through paired ledger movements", async () => {
+    await request(app.getHttpServer())
+      .post("/v1/stock/transfers")
+      .set("Authorization", authHeader)
+      .send({
+        productId: "prd_kbd_mx",
+        sourceWarehouseId: "wh_main",
+        destinationWarehouseId: "wh_showroom",
+        quantity: 5,
+        note: "Move display inventory",
+      })
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body.reference).toMatch(/^TR-/);
+        expect(body.movements).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              productId: "prd_kbd_mx",
+              quantityChange: -5,
+              type: "TRANSFER",
+              warehouseId: "wh_main",
+            }),
+            expect.objectContaining({
+              productId: "prd_kbd_mx",
+              quantityChange: 5,
+              type: "TRANSFER",
+              warehouseId: "wh_showroom",
+            }),
+          ]),
+        );
+      });
+
+    const rows = await request(app.getHttpServer())
+      .get("/v1/stock/rows")
+      .set("Authorization", authHeader)
+      .expect(200);
+
+    expect(
+      rows.body.find(
+        (row: { product: { id: string }; warehouse: { id: string } }) =>
+          row.product.id === "prd_kbd_mx" && row.warehouse.id === "wh_main",
+      ),
+    ).toMatchObject({ onHand: 25 });
+    expect(
+      rows.body.find(
+        (row: { product: { id: string }; warehouse: { id: string } }) =>
+          row.product.id === "prd_kbd_mx" && row.warehouse.id === "wh_showroom",
+      ),
+    ).toMatchObject({ onHand: 9 });
+
+    await request(app.getHttpServer())
+      .post("/v1/stock/transfers")
+      .set("Authorization", authHeader)
+      .send({
+        productId: "prd_monitor_27",
+        sourceWarehouseId: "wh_showroom",
+        destinationWarehouseId: "wh_main",
+        quantity: 1,
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post("/v1/stock/transfers")
+      .set("Authorization", authHeader)
+      .send({
+        productId: "prd_kbd_mx",
+        sourceWarehouseId: "wh_main",
+        destinationWarehouseId: "wh_main",
+        quantity: 1,
+      })
+      .expect(400);
+  });
+
+  it("creates warehouses and updates the default warehouse", async () => {
+    await request(app.getHttpServer())
+      .post("/v1/stock/warehouses")
+      .set("Authorization", authHeader)
+      .send({
+        code: "WEST",
+        name: "West Hub",
+      })
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          code: "WEST",
+          isDefault: false,
+          name: "West Hub",
+        });
+      });
+
+    const created = await request(app.getHttpServer())
+      .post("/v1/stock/warehouses")
+      .set("Authorization", authHeader)
+      .send({
+        code: "EAST",
+        isDefault: true,
+        name: "East Hub",
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .patch(`/v1/stock/warehouses/${created.body.id}`)
+      .set("Authorization", authHeader)
+      .send({
+        code: "EAST-A",
+        isDefault: true,
+        name: "East Hub A",
+      })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          code: "EAST-A",
+          isDefault: true,
+          name: "East Hub A",
+        });
+      });
+
+    const warehouses = await request(app.getHttpServer())
+      .get("/v1/stock/warehouses")
+      .set("Authorization", authHeader)
+      .expect(200);
+
+    expect(
+      warehouses.body
+        .filter((warehouse: { isDefault: boolean }) => warehouse.isDefault)
+        .map((warehouse: { code: string }) => warehouse.code),
+    ).toEqual(["EAST-A"]);
+
+    await request(app.getHttpServer())
+      .post("/v1/stock/warehouses")
+      .set("Authorization", authHeader)
+      .send({
+        code: "EAST-A",
+        name: "Duplicate East",
+      })
+      .expect(409);
+  });
+
   it("confirms sales orders and receives purchase orders through stock ledger", async () => {
     await request(app.getHttpServer())
       .post("/v1/sales-orders/so_1001/confirm")

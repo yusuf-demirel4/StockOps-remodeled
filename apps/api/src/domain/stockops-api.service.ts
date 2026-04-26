@@ -17,8 +17,11 @@ import {
   purchaseOrderInputSchema,
   salesOrderInputSchema,
   stockMovementInputSchema,
+  stockTransferInputSchema,
   supplierInputSchema,
   supplierUpdateInputSchema,
+  warehouseInputSchema,
+  warehouseUpdateInputSchema,
 } from "@stockops/core/schemas";
 import type {
   AppState,
@@ -468,6 +471,187 @@ export class StockOpsApiService {
     );
   }
 
+  async createWarehouse(input: unknown, context: AuthContext) {
+    const parsed = parseInput(warehouseInputSchema, input);
+
+    if (dbMode()) {
+      const prisma = getPrisma();
+
+      try {
+        return await prisma.$transaction(async (tx) => {
+          const warehouseCount = await tx.warehouse.count({
+            where: { organizationId: context.organization.id },
+          });
+          const isDefault = parsed.isDefault === true || warehouseCount === 0;
+
+          if (isDefault) {
+            await tx.warehouse.updateMany({
+              where: {
+                organizationId: context.organization.id,
+                isDefault: true,
+              },
+              data: { isDefault: false },
+            });
+          }
+
+          const warehouse = await tx.warehouse.create({
+            data: {
+              organizationId: context.organization.id,
+              code: parsed.code,
+              name: parsed.name,
+              isDefault,
+            },
+          });
+
+          await tx.auditLog.create({
+            data: {
+              organizationId: context.organization.id,
+              actorId: context.user.id,
+              action: "CREATE",
+              entityType: "Warehouse",
+              entityId: warehouse.id,
+              summary: warehouse.code,
+            },
+          });
+
+          return mapWarehouse(warehouse);
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("Unique constraint")) {
+          throw new ConflictException("Warehouse code already exists.");
+        }
+
+        throw error;
+      }
+    }
+
+    const state = demoState();
+    const organizationWarehouses = state.warehouses.filter(
+      (warehouse) => warehouse.organizationId === context.organization.id,
+    );
+
+    if (
+      organizationWarehouses.some((warehouse) => warehouse.code === parsed.code)
+    ) {
+      throw new ConflictException("Warehouse code already exists.");
+    }
+
+    const isDefault =
+      parsed.isDefault === true || organizationWarehouses.length === 0;
+
+    if (isDefault) {
+      organizationWarehouses.forEach((warehouse) => {
+        warehouse.isDefault = false;
+      });
+    }
+
+    const warehouse: Warehouse = {
+      id: id("wh"),
+      organizationId: context.organization.id,
+      code: parsed.code,
+      name: parsed.name,
+      isDefault,
+    };
+
+    state.warehouses.push(warehouse);
+    return warehouse;
+  }
+
+  async updateWarehouse(
+    warehouseId: string,
+    input: unknown,
+    context: AuthContext,
+  ) {
+    const parsed = parseInput(warehouseUpdateInputSchema, input);
+
+    if (dbMode()) {
+      const prisma = getPrisma();
+      const warehouse = await prisma.warehouse.findFirst({
+        where: { id: warehouseId, organizationId: context.organization.id },
+      });
+
+      if (!warehouse) {
+        throw new NotFoundException("Warehouse not found.");
+      }
+
+      try {
+        return await prisma.$transaction(async (tx) => {
+          if (parsed.isDefault === true) {
+            await tx.warehouse.updateMany({
+              where: {
+                organizationId: context.organization.id,
+                isDefault: true,
+              },
+              data: { isDefault: false },
+            });
+          }
+
+          const updated = await tx.warehouse.update({
+            where: { id: warehouse.id },
+            data: {
+              code: parsed.code,
+              name: parsed.name,
+              isDefault: parsed.isDefault === true ? true : undefined,
+            },
+          });
+
+          await tx.auditLog.create({
+            data: {
+              organizationId: context.organization.id,
+              actorId: context.user.id,
+              action: "UPDATE",
+              entityType: "Warehouse",
+              entityId: updated.id,
+              summary: updated.code,
+            },
+          });
+
+          return mapWarehouse(updated);
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("Unique constraint")) {
+          throw new ConflictException("Warehouse code already exists.");
+        }
+
+        throw error;
+      }
+    }
+
+    const state = demoState();
+    const organizationWarehouses = state.warehouses.filter(
+      (warehouse) => warehouse.organizationId === context.organization.id,
+    );
+    const warehouse = organizationWarehouses.find(
+      (item) => item.id === warehouseId,
+    );
+
+    if (!warehouse) {
+      throw new NotFoundException("Warehouse not found.");
+    }
+
+    if (
+      parsed.code &&
+      organizationWarehouses.some(
+        (item) => item.id !== warehouse.id && item.code === parsed.code,
+      )
+    ) {
+      throw new ConflictException("Warehouse code already exists.");
+    }
+
+    if (parsed.isDefault === true) {
+      organizationWarehouses.forEach((item) => {
+        item.isDefault = item.id === warehouse.id;
+      });
+    }
+
+    Object.assign(warehouse, {
+      code: parsed.code ?? warehouse.code,
+      name: parsed.name ?? warehouse.name,
+    });
+
+    return warehouse;
+  }
+
   async listStockRows(context: AuthContext) {
     if (dbMode()) {
       const [products, warehouses, stockMovements] = await Promise.all([
@@ -553,6 +737,140 @@ export class StockOpsApiService {
 
     demoState().stockMovements.unshift(movement);
     return movement;
+  }
+
+  async createStockTransfer(input: unknown, context: AuthContext) {
+    const parsed = parseInput(stockTransferInputSchema, input);
+    await this.ensureProductExists(parsed.productId, context);
+    await this.ensureWarehouseExists(parsed.sourceWarehouseId, context);
+    await this.ensureWarehouseExists(parsed.destinationWarehouseId, context);
+
+    const sourceMovements = (await this.listStockMovements(context)).filter(
+      (movement) =>
+        movement.productId === parsed.productId &&
+        movement.warehouseId === parsed.sourceWarehouseId,
+    );
+
+    assertEnoughStockForApi(sourceMovements, parsed.sourceWarehouseId, [
+      { productId: parsed.productId, quantity: parsed.quantity },
+    ]);
+
+    if (dbMode()) {
+      const prisma = getPrisma();
+      const [sourceWarehouse, destinationWarehouse, transferMovementCount] =
+        await Promise.all([
+          prisma.warehouse.findFirstOrThrow({
+            where: {
+              id: parsed.sourceWarehouseId,
+              organizationId: context.organization.id,
+            },
+          }),
+          prisma.warehouse.findFirstOrThrow({
+            where: {
+              id: parsed.destinationWarehouseId,
+              organizationId: context.organization.id,
+            },
+          }),
+          prisma.stockMovement.count({
+            where: { organizationId: context.organization.id, type: "TRANSFER" },
+          }),
+        ]);
+      const reference = nextCode("TR", Math.floor(transferMovementCount / 2));
+
+      await prisma.$transaction(async (tx) => {
+        await tx.stockMovement.createMany({
+          data: [
+            {
+              organizationId: context.organization.id,
+              warehouseId: parsed.sourceWarehouseId,
+              productId: parsed.productId,
+              type: "TRANSFER",
+              quantityChange: -parsed.quantity,
+              reference,
+              note: parsed.note || `Transfer to ${destinationWarehouse.name}`,
+              createdById: context.user.id,
+            },
+            {
+              organizationId: context.organization.id,
+              warehouseId: parsed.destinationWarehouseId,
+              productId: parsed.productId,
+              type: "TRANSFER",
+              quantityChange: parsed.quantity,
+              reference,
+              note: parsed.note || `Transfer from ${sourceWarehouse.name}`,
+              createdById: context.user.id,
+            },
+          ],
+        });
+      });
+
+      await this.audit(context, "CREATE", "StockTransfer", reference, reference);
+
+      const movements = await prisma.stockMovement.findMany({
+        where: { organizationId: context.organization.id, reference },
+        orderBy: { quantityChange: "asc" },
+      });
+
+      return { movements: movements.map(mapStockMovement), reference };
+    }
+
+    const state = demoState();
+    const sourceWarehouse = state.warehouses.find(
+      (warehouse) =>
+        warehouse.id === parsed.sourceWarehouseId &&
+        warehouse.organizationId === context.organization.id,
+    );
+    const destinationWarehouse = state.warehouses.find(
+      (warehouse) =>
+        warehouse.id === parsed.destinationWarehouseId &&
+        warehouse.organizationId === context.organization.id,
+    );
+
+    if (!sourceWarehouse || !destinationWarehouse) {
+      throw new NotFoundException("Warehouse not found.");
+    }
+
+    const reference = nextCode(
+      "TR",
+      Math.floor(
+        state.stockMovements.filter(
+          (movement) =>
+            movement.organizationId === context.organization.id &&
+            movement.type === "TRANSFER",
+        ).length / 2,
+      ),
+    );
+    const createdAt = new Date().toISOString();
+    const movements: StockMovement[] = [
+      {
+        id: id("mov"),
+        organizationId: context.organization.id,
+        warehouseId: parsed.sourceWarehouseId,
+        productId: parsed.productId,
+        type: "TRANSFER",
+        quantityChange: -parsed.quantity,
+        reference,
+        note: parsed.note || `Transfer to ${destinationWarehouse.name}`,
+        createdById: context.user.id,
+        createdAt,
+      },
+      {
+        id: id("mov"),
+        organizationId: context.organization.id,
+        warehouseId: parsed.destinationWarehouseId,
+        productId: parsed.productId,
+        type: "TRANSFER",
+        quantityChange: parsed.quantity,
+        reference,
+        note: parsed.note || `Transfer from ${sourceWarehouse.name}`,
+        createdById: context.user.id,
+        createdAt,
+      },
+    ];
+
+    state.stockMovements.unshift(...movements);
+
+    return { movements, reference };
   }
 
   async listSalesOrders(context: AuthContext): Promise<SalesOrder[]> {

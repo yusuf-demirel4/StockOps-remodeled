@@ -5,15 +5,17 @@ import {
   ReceivePurchaseOrderForm,
   SalesOrderForm,
 } from "@/components/order-forms";
-import { Panel, StatusBadge } from "@/components/ui";
+import { EmptyState, Panel, StatusBadge } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
 import { getAppSnapshot } from "@/lib/repository";
 import {
+  numberFormatter,
   productSku,
   purchaseStatusLabel,
   salesStatusLabel,
   supplierName,
 } from "@stockops/core/format";
+import { buildPurchaseRecommendations } from "@stockops/core/purchase-recommendations";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,7 @@ export default async function OrdersPage() {
   const context = await requireAuth();
   const snapshot = await getAppSnapshot(context);
   const activeProducts = snapshot.products.filter((product) => product.isActive);
+  const purchaseRecommendations = buildPurchaseRecommendations(snapshot);
 
   return (
     <AppShell
@@ -40,6 +43,76 @@ export default async function OrdersPage() {
             products={activeProducts}
             suppliers={snapshot.suppliers}
           />
+        </Panel>
+      </div>
+
+      <div className="mt-6">
+        <Panel title="Satın alma önerileri">
+          {purchaseRecommendations.length === 0 ? (
+            <EmptyState>Satın alma önerisi bulunmuyor.</EmptyState>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <thead className="text-xs uppercase text-[#6a746f]">
+                  <tr className="border-b border-[#e3e5dd]">
+                    <th className="py-2 pr-3">SKU</th>
+                    <th className="py-2 pr-3">Ürün</th>
+                    <th className="py-2 pr-3">Tedarikçi</th>
+                    <th className="py-2 pr-3">Eldeki</th>
+                    <th className="py-2 pr-3">Açık satış</th>
+                    <th className="py-2 pr-3">Bekleyen teslim</th>
+                    <th className="py-2 pr-3">Projeksiyon</th>
+                    <th className="py-2">Öneri</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchaseRecommendations.map((recommendation) => (
+                    <tr
+                      className="border-b border-[#eef0ea] last:border-0"
+                      key={recommendation.product.id}
+                    >
+                      <td className="py-3 pr-3 font-mono text-xs">
+                        {recommendation.product.sku}
+                      </td>
+                      <td className="py-3 pr-3 font-medium">
+                        {recommendation.product.name}
+                      </td>
+                      <td className="py-3 pr-3">
+                        {recommendation.supplier?.name ?? "-"}
+                      </td>
+                      <td className="py-3 pr-3">
+                        {numberFormatter.format(recommendation.onHand)}
+                      </td>
+                      <td className="py-3 pr-3">
+                        {numberFormatter.format(recommendation.openSalesDemand)}
+                      </td>
+                      <td className="py-3 pr-3">
+                        {numberFormatter.format(recommendation.pendingInbound)}
+                      </td>
+                      <td className="py-3 pr-3">
+                        {numberFormatter.format(
+                          recommendation.projectedAvailable,
+                        )}
+                      </td>
+                      <td className="py-3">
+                        <StatusBadge
+                          tone={
+                            recommendation.urgency === "critical"
+                              ? "danger"
+                              : "warning"
+                          }
+                        >
+                          {numberFormatter.format(
+                            recommendation.suggestedQuantity,
+                          )}
+                        </StatusBadge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Panel>
       </div>
 

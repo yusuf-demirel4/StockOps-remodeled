@@ -18,7 +18,7 @@ const navigation = [
   { href: "/inventory", label: "Stok", icon: Boxes },
   { href: "/orders", label: "Siparişler", icon: ClipboardList },
   { href: "/suppliers", label: "Tedarikçiler", icon: Truck },
-  { href: "/settings", label: "Yetkiler", icon: Settings },
+  { href: "/settings", label: "Ayarlar", icon: Settings },
 ];
 
 type AppShellProps = {
