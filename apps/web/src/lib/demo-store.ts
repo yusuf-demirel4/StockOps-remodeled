@@ -9,10 +9,12 @@ import {
 } from "@stockops/core/inventory";
 import {
   productInputSchema,
+  productUpdateInputSchema,
   purchaseOrderInputSchema,
   salesOrderInputSchema,
   stockMovementInputSchema,
   supplierInputSchema,
+  supplierUpdateInputSchema,
 } from "@stockops/core/schemas";
 import { verifyPassword } from "@stockops/core/password";
 import type {
@@ -259,6 +261,102 @@ export function createProduct(input: unknown, context?: AuthContext) {
   return product;
 }
 
+export function updateProduct(
+  productId: string,
+  input: unknown,
+  context?: AuthContext,
+) {
+  const parsed = productUpdateInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!productId) {
+    throw new Error("Urun bulunamadi.");
+  }
+
+  if (!can(membership.role, "manage_products")) {
+    throw new Error("Bu rol urun yonetemez.");
+  }
+
+  const product = appState.products.find(
+    (item) =>
+      item.id === productId && item.organizationId === organization.id,
+  );
+
+  if (!product) {
+    throw new Error("Urun bulunamadi.");
+  }
+
+  if (
+    parsed.sku &&
+    appState.products.some(
+      (item) =>
+        item.organizationId === organization.id &&
+        item.id !== product.id &&
+        item.sku === parsed.sku,
+    )
+  ) {
+    throw new Error("Bu SKU zaten kayitli.");
+  }
+
+  Object.assign(product, {
+    ...parsed,
+    barcode: parsed.barcode === "" ? undefined : parsed.barcode,
+  });
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "UPDATE",
+    entityType: "Product",
+    entityId: product.id,
+    summary: `${product.sku} urunu guncellendi`,
+  });
+
+  return product;
+}
+
+export function setProductActive(
+  productId: string,
+  isActive: boolean,
+  context?: AuthContext,
+) {
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!productId) {
+    throw new Error("Urun bulunamadi.");
+  }
+
+  if (!can(membership.role, "manage_products")) {
+    throw new Error("Bu rol urun yonetemez.");
+  }
+
+  const product = appState.products.find(
+    (item) =>
+      item.id === productId && item.organizationId === organization.id,
+  );
+
+  if (!product) {
+    throw new Error("Urun bulunamadi.");
+  }
+
+  product.isActive = isActive;
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "UPDATE",
+    entityType: "Product",
+    entityId: product.id,
+    summary: `${product.sku} urunu ${isActive ? "aktif" : "pasif"} yapildi`,
+  });
+
+  return product;
+}
+
 export function createStockMovement(
   input: unknown,
   context?: AuthContext,
@@ -318,6 +416,16 @@ export function createSupplier(input: unknown, context?: AuthContext) {
     throw new Error("Bu rol tedarikçi oluşturamaz.");
   }
 
+  const exists = appState.suppliers.some(
+    (supplier) =>
+      supplier.organizationId === organization.id &&
+      supplier.name === parsed.name,
+  );
+
+  if (exists) {
+    throw new Error("Bu tedarikci zaten kayitli.");
+  }
+
   const supplier: Supplier = {
     ...parsed,
     id: id("sup"),
@@ -334,6 +442,62 @@ export function createSupplier(input: unknown, context?: AuthContext) {
     entityType: "Supplier",
     entityId: supplier.id,
     summary: `${supplier.name} tedarikçisi oluşturuldu`,
+  });
+
+  return supplier;
+}
+
+export function updateSupplier(
+  supplierId: string,
+  input: unknown,
+  context?: AuthContext,
+) {
+  const parsed = supplierUpdateInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!supplierId) {
+    throw new Error("Tedarikci bulunamadi.");
+  }
+
+  if (!can(membership.role, "manage_purchasing")) {
+    throw new Error("Bu rol tedarikci yonetemez.");
+  }
+
+  const supplier = appState.suppliers.find(
+    (item) =>
+      item.id === supplierId && item.organizationId === organization.id,
+  );
+
+  if (!supplier) {
+    throw new Error("Tedarikci bulunamadi.");
+  }
+
+  if (
+    parsed.name &&
+    appState.suppliers.some(
+      (item) =>
+        item.organizationId === organization.id &&
+        item.id !== supplier.id &&
+        item.name === parsed.name,
+    )
+  ) {
+    throw new Error("Bu tedarikci zaten kayitli.");
+  }
+
+  Object.assign(supplier, {
+    ...parsed,
+    email: parsed.email === "" ? undefined : parsed.email,
+  });
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "UPDATE",
+    entityType: "Supplier",
+    entityId: supplier.id,
+    summary: `${supplier.name} tedarikcisi guncellendi`,
   });
 
   return supplier;

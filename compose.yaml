@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: stockops
+      POSTGRES_PASSWORD: stockops
+      POSTGRES_USER: stockops
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stockops -d stockops"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - stockops_postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  stockops_postgres_data:

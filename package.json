@@ -13,6 +13,11 @@
     "dev:web": "turbo dev --filter=@stockops/web",
     "dev:api": "turbo dev --filter=@stockops/api",
     "dev:worker": "turbo dev --filter=@stockops/worker",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres",
+    "db:ps": "docker compose ps",
+    "db:reset:local": "docker compose down -v",
+    "db:up": "docker compose up -d postgres",
     "build": "turbo build",
     "lint": "turbo lint --filter=@stockops/web",
     "typecheck": "turbo typecheck",
@@ -24,7 +29,8 @@
     "prisma:migrate:deploy": "turbo prisma:migrate:deploy --filter=@stockops/db",
     "prisma:migrate:status": "turbo prisma:migrate:status --filter=@stockops/db",
     "prisma:push": "turbo prisma:push --filter=@stockops/db",
-    "prisma:seed": "turbo prisma:seed --filter=@stockops/db"
+    "prisma:seed": "turbo prisma:seed --filter=@stockops/db",
+    "smoke:database": "npm run smoke:database --workspace @stockops/api"
   },
   "devDependencies": {
     "turbo": "^2.8.0"

@@ -148,11 +148,23 @@ WEBHOOK_DEFAULT_ORGANIZATION_SLUG="kernelguard"
 akisinda kullandigi izole veritabanidir. Local PostgreSQL kullanirken ana
 veritabani ile ayni yetkilere sahip ayri bir database olmalidir.
 
+Local PostgreSQL baslatma:
+
+```bash
+npm run db:up
+npm run db:ps
+```
+
+`compose.yaml`, `stockops` ve `stockops_shadow` veritabanlarini hazirlar.
+Mevcut volume daha once olusturulduysa init script'leri yeniden calismaz; sadece
+lokal veriyi sifirlamak icin `npm run db:reset:local` kullanin.
+
 Ilk database kurulumu:
 
 ```bash
 npm run prisma:migrate:dev
 npm run prisma:seed
+npm run smoke:database
 ```
 
 Production/staging migration akisi:
@@ -160,6 +172,7 @@ Production/staging migration akisi:
 ```bash
 npm run prisma:migrate:deploy
 npm run prisma:seed
+npm run smoke:database
 ```
 
 Migration dosyalari `packages/db/prisma/migrations` altinda versiyonlanir.
@@ -190,6 +203,7 @@ npm test
 npm run build
 npm run prisma:validate
 npm run prisma:generate
+npm run smoke:database
 ```
 
 ## Ekran goruntuleri

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { ActionState } from "@/lib/action-state";
 import { requireAuth, signInWithPassword, signOut } from "@/lib/auth";
 import {
   confirmSalesOrder,
@@ -11,8 +12,13 @@ import {
   createStockMovement,
   createSupplier,
   receivePurchaseOrder,
+  setProductActive,
+  updateProduct,
+  updateSupplier,
 } from "@/lib/repository";
 import { signInInputSchema } from "@stockops/core/schemas";
+import type { AuthContext } from "@stockops/core/types";
+import { ZodError } from "zod";
 
 function value(formData: FormData, key: string) {
   const item = formData.get(key);
@@ -26,6 +32,69 @@ function refresh() {
   revalidatePath("/orders");
   revalidatePath("/suppliers");
   revalidatePath("/settings");
+}
+
+function success(message: string): ActionState {
+  return {
+    actionId: Date.now(),
+    message,
+    status: "success",
+  };
+}
+
+function failure(error: unknown): ActionState {
+  return {
+    actionId: Date.now(),
+    message: actionErrorMessage(error),
+    status: "error",
+  };
+}
+
+function actionErrorMessage(error: unknown) {
+  if (error instanceof ZodError) {
+    return "Form alanlarını kontrol edin. Zorunlu alanlar veya sayı değerleri geçersiz.";
+  }
+
+  if (!(error instanceof Error)) {
+    return "İşlem tamamlanamadı. Lütfen tekrar deneyin.";
+  }
+
+  if (error.message.startsWith("Insufficient stock")) {
+    return "Yetersiz stok. Çıkış miktarı eldeki stoktan büyük.";
+  }
+
+  if (
+    error.message.includes("SKU already") ||
+    error.message.includes("Unique constraint") ||
+    error.message.includes("zaten")
+  ) {
+    return "Bu kayıt zaten mevcut. Benzersiz alanları kontrol edin.";
+  }
+
+  if (
+    error.message.includes("not found") ||
+    error.message.includes("bulunamadi") ||
+    error.message.includes("bulunamad")
+  ) {
+    return "Kayıt bulunamadı veya artık güncel değil.";
+  }
+
+  return error.message || "İşlem tamamlanamadı. Lütfen tekrar deneyin.";
+}
+
+async function runMutation(
+  successMessage: string,
+  mutation: (context: AuthContext) => Promise<unknown>,
+) {
+  const context = await requireAuth();
+
+  try {
+    await mutation(context);
+    refresh();
+    return success(successMessage);
+  } catch (error) {
+    return failure(error);
+  }
 }
 
 export async function signInAction(formData: FormData) {
@@ -55,86 +124,157 @@ export async function signOutAction() {
   redirect("/sign-in");
 }
 
-export async function createProductAction(formData: FormData) {
-  const context = await requireAuth();
-  await createProduct(
-    {
-      sku: value(formData, "sku"),
-      name: value(formData, "name"),
-      barcode: value(formData, "barcode"),
-      category: value(formData, "category"),
-      minimumStock: value(formData, "minimumStock"),
-    },
-    context,
+export async function createProductAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Ürün eklendi.", (context) =>
+    createProduct(
+      {
+        sku: value(formData, "sku"),
+        name: value(formData, "name"),
+        barcode: value(formData, "barcode"),
+        category: value(formData, "category"),
+        minimumStock: value(formData, "minimumStock"),
+      },
+      context,
+    ),
   );
-  refresh();
 }
 
-export async function createStockMovementAction(formData: FormData) {
-  const context = await requireAuth();
-  await createStockMovement(
-    {
-      productId: value(formData, "productId"),
-      warehouseId: value(formData, "warehouseId"),
-      type: value(formData, "type"),
-      quantity: value(formData, "quantity"),
-      note: value(formData, "note"),
-    },
-    context,
+export async function updateProductAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Ürün güncellendi.", (context) =>
+    updateProduct(
+      value(formData, "productId"),
+      {
+        sku: value(formData, "sku"),
+        name: value(formData, "name"),
+        barcode: value(formData, "barcode"),
+        category: value(formData, "category"),
+        minimumStock: value(formData, "minimumStock"),
+      },
+      context,
+    ),
   );
-  refresh();
 }
 
-export async function createSupplierAction(formData: FormData) {
-  const context = await requireAuth();
-  await createSupplier(
-    {
-      name: value(formData, "name"),
-      contactName: value(formData, "contactName"),
-      email: value(formData, "email"),
-      phone: value(formData, "phone"),
-      leadTimeDays: value(formData, "leadTimeDays"),
-    },
-    context,
+export async function setProductActiveAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  const isActive = value(formData, "isActive") === "true";
+
+  return runMutation(
+    isActive ? "Ürün aktif hale getirildi." : "Ürün pasif hale getirildi.",
+    (context) => setProductActive(value(formData, "productId"), isActive, context),
   );
-  refresh();
 }
 
-export async function createSalesOrderAction(formData: FormData) {
-  const context = await requireAuth();
-  await createSalesOrder(
-    {
-      customerName: value(formData, "customerName"),
-      productId: value(formData, "productId"),
-      quantity: value(formData, "quantity"),
-    },
-    context,
+export async function createStockMovementAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Stok hareketi kaydedildi.", (context) =>
+    createStockMovement(
+      {
+        productId: value(formData, "productId"),
+        warehouseId: value(formData, "warehouseId"),
+        type: value(formData, "type"),
+        quantity: value(formData, "quantity"),
+        note: value(formData, "note"),
+      },
+      context,
+    ),
   );
-  refresh();
 }
 
-export async function confirmSalesOrderAction(formData: FormData) {
-  const context = await requireAuth();
-  await confirmSalesOrder(value(formData, "orderId"), context);
-  refresh();
-}
-
-export async function createPurchaseOrderAction(formData: FormData) {
-  const context = await requireAuth();
-  await createPurchaseOrder(
-    {
-      supplierId: value(formData, "supplierId"),
-      productId: value(formData, "productId"),
-      quantity: value(formData, "quantity"),
-      expectedDate: value(formData, "expectedDate"),
-    },
-    context,
+export async function createSupplierAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Tedarikçi eklendi.", (context) =>
+    createSupplier(
+      {
+        name: value(formData, "name"),
+        contactName: value(formData, "contactName"),
+        email: value(formData, "email"),
+        phone: value(formData, "phone"),
+        leadTimeDays: value(formData, "leadTimeDays"),
+      },
+      context,
+    ),
   );
-  refresh();
 }
 
-export async function receivePurchaseOrderAction(formData: FormData) {
-  const context = await requireAuth();
-  await receivePurchaseOrder(value(formData, "orderId"), context);
-  refresh();
+export async function updateSupplierAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Tedarikçi güncellendi.", (context) =>
+    updateSupplier(
+      value(formData, "supplierId"),
+      {
+        name: value(formData, "name"),
+        contactName: value(formData, "contactName"),
+        email: value(formData, "email"),
+        phone: value(formData, "phone"),
+        leadTimeDays: value(formData, "leadTimeDays"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function createSalesOrderAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Satış siparişi oluşturuldu.", (context) =>
+    createSalesOrder(
+      {
+        customerName: value(formData, "customerName"),
+        productId: value(formData, "productId"),
+        quantity: value(formData, "quantity"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function confirmSalesOrderAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Satış siparişi onaylandı.", (context) =>
+    confirmSalesOrder(value(formData, "orderId"), context),
+  );
+}
+
+export async function createPurchaseOrderAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Satın alma siparişi oluşturuldu.", (context) =>
+    createPurchaseOrder(
+      {
+        supplierId: value(formData, "supplierId"),
+        productId: value(formData, "productId"),
+        quantity: value(formData, "quantity"),
+        expectedDate: value(formData, "expectedDate"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function receivePurchaseOrderAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Satın alma teslim alındı.", (context) =>
+    receivePurchaseOrder(value(formData, "orderId"), context),
+  );
 }

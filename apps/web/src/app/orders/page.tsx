@@ -1,19 +1,11 @@
-import { Check, Plus, Truck } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import {
-  buttonClass,
-  inputClass,
-  Panel,
-  selectClass,
-  StatusBadge,
-  subtleButtonClass,
-} from "@/components/ui";
-import {
-  confirmSalesOrderAction,
-  createPurchaseOrderAction,
-  createSalesOrderAction,
-  receivePurchaseOrderAction,
-} from "@/lib/actions";
+  ConfirmSalesOrderForm,
+  PurchaseOrderForm,
+  ReceivePurchaseOrderForm,
+  SalesOrderForm,
+} from "@/components/order-forms";
+import { Panel, StatusBadge } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
 import { getAppSnapshot } from "@/lib/repository";
 import {
@@ -28,6 +20,7 @@ export const dynamic = "force-dynamic";
 export default async function OrdersPage() {
   const context = await requireAuth();
   const snapshot = await getAppSnapshot(context);
+  const activeProducts = snapshot.products.filter((product) => product.isActive);
 
   return (
     <AppShell
@@ -39,81 +32,14 @@ export default async function OrdersPage() {
     >
       <div className="grid gap-6 xl:grid-cols-2">
         <Panel title="Satış siparişi">
-          <form action={createSalesOrderAction} className="grid gap-3">
-            <label className="grid gap-1.5 text-sm font-medium">
-              Müşteri
-              <input className={inputClass} name="customerName" required />
-            </label>
-            <label className="grid gap-1.5 text-sm font-medium">
-              Ürün
-              <select className={selectClass} name="productId" required>
-                {snapshot.products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.sku} · {product.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1.5 text-sm font-medium">
-              Miktar
-              <input
-                className={inputClass}
-                min="1"
-                name="quantity"
-                required
-                type="number"
-              />
-            </label>
-            <button className={buttonClass} type="submit">
-              <Plus aria-hidden="true" className="size-4" />
-              Satış oluştur
-            </button>
-          </form>
+          <SalesOrderForm products={activeProducts} />
         </Panel>
 
         <Panel title="Satın alma siparişi">
-          <form action={createPurchaseOrderAction} className="grid gap-3">
-            <label className="grid gap-1.5 text-sm font-medium">
-              Tedarikçi
-              <select className={selectClass} name="supplierId" required>
-                {snapshot.suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1.5 text-sm font-medium">
-              Ürün
-              <select className={selectClass} name="productId" required>
-                {snapshot.products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.sku} · {product.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1.5 text-sm font-medium">
-                Miktar
-                <input
-                  className={inputClass}
-                  min="1"
-                  name="quantity"
-                  required
-                  type="number"
-                />
-              </label>
-              <label className="grid gap-1.5 text-sm font-medium">
-                Beklenen tarih
-                <input className={inputClass} name="expectedDate" type="date" />
-              </label>
-            </div>
-            <button className={buttonClass} type="submit">
-              <Truck aria-hidden="true" className="size-4" />
-              Satın alma oluştur
-            </button>
-          </form>
+          <PurchaseOrderForm
+            products={activeProducts}
+            suppliers={snapshot.suppliers}
+          />
         </Panel>
       </div>
 
@@ -133,7 +59,7 @@ export default async function OrdersPage() {
               <tbody>
                 {snapshot.salesOrders.map((order) => (
                   <tr
-                    className="border-b border-[#eef0ea] last:border-0"
+                    className="border-b border-[#eef0ea] align-top last:border-0"
                     key={order.id}
                   >
                     <td className="py-3 pr-3 font-mono text-xs">{order.code}</td>
@@ -157,13 +83,7 @@ export default async function OrdersPage() {
                     </td>
                     <td className="py-3">
                       {order.status === "DRAFT" ? (
-                        <form action={confirmSalesOrderAction}>
-                          <input name="orderId" type="hidden" value={order.id} />
-                          <button className={subtleButtonClass} type="submit">
-                            <Check aria-hidden="true" className="size-4" />
-                            Onayla
-                          </button>
-                        </form>
+                        <ConfirmSalesOrderForm orderId={order.id} />
                       ) : (
                         "-"
                       )}
@@ -190,7 +110,7 @@ export default async function OrdersPage() {
               <tbody>
                 {snapshot.purchaseOrders.map((order) => (
                   <tr
-                    className="border-b border-[#eef0ea] last:border-0"
+                    className="border-b border-[#eef0ea] align-top last:border-0"
                     key={order.id}
                   >
                     <td className="py-3 pr-3 font-mono text-xs">{order.code}</td>
@@ -214,13 +134,7 @@ export default async function OrdersPage() {
                     </td>
                     <td className="py-3">
                       {order.status !== "COMPLETED" ? (
-                        <form action={receivePurchaseOrderAction}>
-                          <input name="orderId" type="hidden" value={order.id} />
-                          <button className={subtleButtonClass} type="submit">
-                            <Check aria-hidden="true" className="size-4" />
-                            Teslim al
-                          </button>
-                        </form>
+                        <ReceivePurchaseOrderForm orderId={order.id} />
                       ) : (
                         "-"
                       )}

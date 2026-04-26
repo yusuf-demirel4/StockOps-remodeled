@@ -9,14 +9,19 @@ import {
   createSupplier as createDemoSupplier,
   getDemoSnapshot,
   receivePurchaseOrder as receiveDemoPurchaseOrder,
+  setProductActive as setDemoProductActive,
+  updateProduct as updateDemoProduct,
+  updateSupplier as updateDemoSupplier,
 } from "@/lib/demo-store";
 import { getPrisma } from "@/lib/prisma";
 import {
   productInputSchema,
+  productUpdateInputSchema,
   purchaseOrderInputSchema,
   salesOrderInputSchema,
   stockMovementInputSchema,
   supplierInputSchema,
+  supplierUpdateInputSchema,
 } from "@stockops/core/schemas";
 import {
   assertEnoughStock,
@@ -49,6 +54,16 @@ function ensurePermission(context: AuthContext, permission: Parameters<typeof ca
   if (!can(context.role, permission)) {
     throw new Error("Bu işlem için yetkiniz yok.");
   }
+}
+
+function ensureRecordId(recordId: string, label: string) {
+  if (!recordId) {
+    throw new Error(`${label} bulunamadi.`);
+  }
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return error instanceof Error && error.message.includes("Unique constraint");
 }
 
 function mapProduct(product: {
@@ -257,16 +272,24 @@ export async function createProduct(input: unknown, context: AuthContext) {
   ensurePermission(context, "manage_products");
   const parsed = productInputSchema.parse(input);
 
-  const product = await getPrisma().product.create({
-    data: {
-      organizationId: context.organization.id,
-      sku: parsed.sku,
-      name: parsed.name,
-      barcode: parsed.barcode || null,
-      category: parsed.category,
-      minimumStock: parsed.minimumStock,
-    },
-  });
+  const product = await getPrisma()
+    .product.create({
+      data: {
+        organizationId: context.organization.id,
+        sku: parsed.sku,
+        name: parsed.name,
+        barcode: parsed.barcode || null,
+        category: parsed.category,
+        minimumStock: parsed.minimumStock,
+      },
+    })
+    .catch((error: unknown) => {
+      if (isUniqueConstraintError(error)) {
+        throw new Error("Bu SKU zaten kayitli.");
+      }
+
+      throw error;
+    });
 
   await audit(
     context,
@@ -274,6 +297,88 @@ export async function createProduct(input: unknown, context: AuthContext) {
     "Product",
     product.id,
     `${parsed.sku} ürünü oluşturuldu`,
+  );
+}
+
+export async function updateProduct(
+  productId: string,
+  input: unknown,
+  context: AuthContext,
+) {
+  if (!dbMode()) {
+    return updateDemoProduct(productId, input, context);
+  }
+
+  ensureRecordId(productId, "Urun");
+  ensurePermission(context, "manage_products");
+  const parsed = productUpdateInputSchema.parse(input);
+  const product = await getPrisma().product.findFirst({
+    where: { id: productId, organizationId: context.organization.id },
+  });
+
+  if (!product) {
+    throw new Error("Urun bulunamadi.");
+  }
+
+  const updated = await getPrisma()
+    .product.update({
+      where: { id: product.id },
+      data: {
+        sku: parsed.sku,
+        name: parsed.name,
+        barcode:
+          parsed.barcode === undefined ? undefined : parsed.barcode || null,
+        category: parsed.category,
+        minimumStock: parsed.minimumStock,
+      },
+    })
+    .catch((error: unknown) => {
+      if (isUniqueConstraintError(error)) {
+        throw new Error("Bu SKU zaten kayitli.");
+      }
+
+      throw error;
+    });
+
+  await audit(
+    context,
+    "UPDATE",
+    "Product",
+    updated.id,
+    `${updated.sku} urunu guncellendi`,
+  );
+}
+
+export async function setProductActive(
+  productId: string,
+  isActive: boolean,
+  context: AuthContext,
+) {
+  if (!dbMode()) {
+    return setDemoProductActive(productId, isActive, context);
+  }
+
+  ensureRecordId(productId, "Urun");
+  ensurePermission(context, "manage_products");
+  const product = await getPrisma().product.findFirst({
+    where: { id: productId, organizationId: context.organization.id },
+  });
+
+  if (!product) {
+    throw new Error("Urun bulunamadi.");
+  }
+
+  const updated = await getPrisma().product.update({
+    where: { id: product.id },
+    data: { isActive },
+  });
+
+  await audit(
+    context,
+    "UPDATE",
+    "Product",
+    updated.id,
+    `${updated.sku} urunu ${isActive ? "aktif" : "pasif"} yapildi`,
   );
 }
 
@@ -331,16 +436,24 @@ export async function createSupplier(input: unknown, context: AuthContext) {
 
   ensurePermission(context, "manage_purchasing");
   const parsed = supplierInputSchema.parse(input);
-  const supplier = await getPrisma().supplier.create({
-    data: {
-      organizationId: context.organization.id,
-      name: parsed.name,
-      contactName: parsed.contactName || null,
-      email: parsed.email || null,
-      phone: parsed.phone || null,
-      leadTimeDays: parsed.leadTimeDays,
-    },
-  });
+  const supplier = await getPrisma()
+    .supplier.create({
+      data: {
+        organizationId: context.organization.id,
+        name: parsed.name,
+        contactName: parsed.contactName || null,
+        email: parsed.email || null,
+        phone: parsed.phone || null,
+        leadTimeDays: parsed.leadTimeDays,
+      },
+    })
+    .catch((error: unknown) => {
+      if (isUniqueConstraintError(error)) {
+        throw new Error("Bu tedarikci zaten kayitli.");
+      }
+
+      throw error;
+    });
 
   await audit(
     context,
@@ -348,6 +461,55 @@ export async function createSupplier(input: unknown, context: AuthContext) {
     "Supplier",
     supplier.id,
     `${supplier.name} tedarikçisi oluşturuldu`,
+  );
+}
+
+export async function updateSupplier(
+  supplierId: string,
+  input: unknown,
+  context: AuthContext,
+) {
+  if (!dbMode()) {
+    return updateDemoSupplier(supplierId, input, context);
+  }
+
+  ensureRecordId(supplierId, "Tedarikci");
+  ensurePermission(context, "manage_purchasing");
+  const parsed = supplierUpdateInputSchema.parse(input);
+  const supplier = await getPrisma().supplier.findFirst({
+    where: { id: supplierId, organizationId: context.organization.id },
+  });
+
+  if (!supplier) {
+    throw new Error("Tedarikci bulunamadi.");
+  }
+
+  const updated = await getPrisma()
+    .supplier.update({
+      where: { id: supplier.id },
+      data: {
+        name: parsed.name,
+        contactName:
+          parsed.contactName === undefined ? undefined : parsed.contactName || null,
+        email: parsed.email === undefined ? undefined : parsed.email || null,
+        phone: parsed.phone === undefined ? undefined : parsed.phone || null,
+        leadTimeDays: parsed.leadTimeDays,
+      },
+    })
+    .catch((error: unknown) => {
+      if (isUniqueConstraintError(error)) {
+        throw new Error("Bu tedarikci zaten kayitli.");
+      }
+
+      throw error;
+    });
+
+  await audit(
+    context,
+    "UPDATE",
+    "Supplier",
+    updated.id,
+    `${updated.name} tedarikcisi guncellendi`,
   );
 }
 
@@ -569,7 +731,7 @@ function nextCode(prefix: string, count: number) {
 
 async function audit(
   context: AuthContext,
-  action: "CREATE" | "CONFIRM" | "RECEIVE",
+  action: "CREATE" | "UPDATE" | "CONFIRM" | "RECEIVE",
   entityType: string,
   entityId: string,
   summary: string,

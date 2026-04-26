@@ -189,6 +189,51 @@ async function main() {
     skipDuplicates: true,
   });
 
+  await prisma.salesOrder.upsert({
+    where: {
+      organizationId_code: {
+        organizationId: organization.id,
+        code: "SO-1001",
+      },
+    },
+    create: {
+      organizationId: organization.id,
+      code: "SO-1001",
+      customerName: "Nova Bilişim",
+      status: "DRAFT",
+      lines: {
+        create: [{ productId: keyboard.id, quantity: 3 }],
+      },
+    },
+    update: {},
+  });
+
+  await prisma.purchaseOrder.upsert({
+    where: {
+      organizationId_code: {
+        organizationId: organization.id,
+        code: "PO-2001",
+      },
+    },
+    create: {
+      organizationId: organization.id,
+      supplierId: displayHub.id,
+      code: "PO-2001",
+      status: "SENT",
+      expectedDate: new Date("2026-05-02T00:00:00.000Z"),
+      lines: {
+        create: [
+          {
+            productId: monitor.id,
+            quantity: 10,
+            receivedQuantity: 0,
+          },
+        ],
+      },
+    },
+    update: {},
+  });
+
   const existingMovements = await prisma.stockMovement.count({
     where: { organizationId: organization.id },
   });
