@@ -14,6 +14,20 @@ describe("worker queue", () => {
     });
   });
 
+  it("routes low stock notifications through a safe provider adapter", async () => {
+    const job = createJob("notifications.low-stock.dispatch", {
+      organizationId: "org_kernel_guard",
+      reason: "manual-test",
+    });
+
+    await expect(handleJob(job)).resolves.toMatchObject({
+      channel: "SMS",
+      mode: "dry-run",
+      provider: "console",
+      status: "notification-dispatched",
+    });
+  });
+
   it("routes webhook jobs with the durable event identity", async () => {
     const job = createJob("shopify.webhook.received", {
       webhookEventId: "wh_123",

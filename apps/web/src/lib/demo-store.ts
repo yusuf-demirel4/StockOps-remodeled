@@ -25,12 +25,14 @@ import type {
   AppSnapshot,
   AuthContext,
   AuditLog,
+  NotificationDelivery,
   Product,
   PurchaseOrder,
   SalesOrder,
   Session,
   StockMovement,
   Supplier,
+  WebhookEvent,
   Warehouse,
 } from "@stockops/core/types";
 
@@ -123,6 +125,12 @@ export function getDemoSnapshot(context: AuthContext): AppSnapshot {
     openSalesOrders: getOpenSalesOrders(salesOrders),
     openPurchaseOrders: getOpenPurchaseOrders(purchaseOrders),
     auditLogs: appState.auditLogs.slice(0, 8),
+    webhookEvents: (appState.webhookEvents ?? [])
+      .filter((event) => event.organizationId === organization.id)
+      .slice(0, 12) as WebhookEvent[],
+    notificationDeliveries: (appState.notificationDeliveries ?? [])
+      .filter((delivery) => delivery.organizationId === organization.id)
+      .slice(0, 12) as NotificationDelivery[],
     permissions: {
       canManageUsers: can(role, "manage_users"),
       canManageProducts: can(role, "manage_products"),

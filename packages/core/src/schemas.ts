@@ -104,6 +104,13 @@ export const webhookEventStatusSchema = z.enum([
   "FAILED",
   "IGNORED",
 ]);
+export const notificationChannelSchema = z.enum(["SMS", "WHATSAPP"]);
+export const notificationDeliveryStatusSchema = z.enum([
+  "PENDING",
+  "SENT",
+  "FAILED",
+  "SKIPPED",
+]);
 
 export const signInInputSchema = z.object({
   email: z.string().trim().email(),

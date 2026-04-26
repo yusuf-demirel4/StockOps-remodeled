@@ -192,5 +192,7 @@ export function createInitialState(): AppState {
       },
     ],
     sessions: [],
+    webhookEvents: [],
+    notificationDeliveries: [],
   };
 }

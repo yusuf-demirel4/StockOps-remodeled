@@ -28,6 +28,12 @@ export type WebhookEventStatus =
   | "PROCESSED"
   | "FAILED"
   | "IGNORED";
+export type NotificationChannel = "SMS" | "WHATSAPP";
+export type NotificationDeliveryStatus =
+  | "PENDING"
+  | "SENT"
+  | "FAILED"
+  | "SKIPPED";
 
 export type Permission =
   | "manage_users"
@@ -177,6 +183,20 @@ export type WebhookEvent = {
   processedAt?: string;
 };
 
+export type NotificationDelivery = {
+  id: string;
+  organizationId: string;
+  channel: NotificationChannel;
+  provider: string;
+  recipient?: string;
+  message: string;
+  status: NotificationDeliveryStatus;
+  reason?: string;
+  error?: string;
+  createdAt: string;
+  sentAt?: string;
+};
+
 export type AppState = {
   organizations: Organization[];
   users: User[];
@@ -191,6 +211,7 @@ export type AppState = {
   sessions: Session[];
   apiTokens?: ApiToken[];
   webhookEvents?: WebhookEvent[];
+  notificationDeliveries?: NotificationDelivery[];
 };
 
 export type AuthContext = {
@@ -215,6 +236,8 @@ export type AppSnapshot = {
   openSalesOrders: SalesOrder[];
   openPurchaseOrders: PurchaseOrder[];
   auditLogs: AuditLog[];
+  webhookEvents: WebhookEvent[];
+  notificationDeliveries: NotificationDelivery[];
   permissions: {
     canManageUsers: boolean;
     canManageProducts: boolean;

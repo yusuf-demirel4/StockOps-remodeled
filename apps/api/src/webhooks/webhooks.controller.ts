@@ -5,6 +5,7 @@ import {
   HttpCode,
   Inject,
   Post,
+  RawBody,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -55,14 +56,20 @@ export class WebhooksController {
     required: false,
     example: "4c9b2a9f-6d54-4d8e-8893-3d7a7c830001",
   })
+  @ApiHeader({
+    name: "X-Shopify-Hmac-Sha256",
+    required: false,
+    description: "Required when SHOPIFY_WEBHOOK_SECRET is configured.",
+  })
   @ApiBody({ schema: webhookPayloadBodySchema })
   @ApiAcceptedResponse({ schema: webhookAcceptedResponseSchema })
   acceptShopify(
     @Headers() headers: Record<string, string | string[] | undefined>,
     @Headers("x-shopify-topic") topic: string | undefined,
     @Body() body: unknown,
+    @RawBody() rawBody: Buffer | undefined,
   ) {
-    return this.inbox.accept("shopify", topic, body, headers);
+    return this.inbox.accept("shopify", topic, body, headers, rawBody);
   }
 
   @Post("woocommerce")
@@ -78,13 +85,19 @@ export class WebhooksController {
     required: false,
     example: "wc-delivery-0001",
   })
+  @ApiHeader({
+    name: "X-WC-Webhook-Signature",
+    required: false,
+    description: "Required when WOOCOMMERCE_WEBHOOK_SECRET is configured.",
+  })
   @ApiBody({ schema: webhookPayloadBodySchema })
   @ApiAcceptedResponse({ schema: webhookAcceptedResponseSchema })
   acceptWooCommerce(
     @Headers() headers: Record<string, string | string[] | undefined>,
     @Headers("x-wc-webhook-topic") topic: string | undefined,
     @Body() body: unknown,
+    @RawBody() rawBody: Buffer | undefined,
   ) {
-    return this.inbox.accept("woocommerce", topic, body, headers);
+    return this.inbox.accept("woocommerce", topic, body, headers, rawBody);
   }
 }

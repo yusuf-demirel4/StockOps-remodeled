@@ -11,11 +11,13 @@
     "./format": "./src/format.ts",
     "./inventory": "./src/inventory.ts",
     "./jobs": "./src/jobs.ts",
+    "./notifications": "./src/notifications.ts",
     "./password": "./src/password.ts",
     "./purchase-recommendations": "./src/purchase-recommendations.ts",
     "./schemas": "./src/schemas.ts",
     "./tokens": "./src/tokens.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./webhooks": "./src/webhooks.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

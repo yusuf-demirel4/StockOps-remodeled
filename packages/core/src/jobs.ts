@@ -1,11 +1,13 @@
 import type { WebhookSource } from "./types";
+import type { NotificationChannel } from "./types";
 
 export const jobNames = [
   "shopify.webhook.received",
   "woocommerce.webhook.received",
+  "integrations.stock-sync.dispatch",
   "inventory.reorder.evaluate",
   "notifications.low-stock.dispatch",
-  "forecast.demand.refresh",
+  "notifications.order-status.dispatch",
 ] as const;
 
 export type JobName = (typeof jobNames)[number];
@@ -28,20 +30,25 @@ export type ReorderEvaluatePayload = {
 
 export type NotificationPayload = {
   organizationId?: string;
+  channel?: NotificationChannel;
   productId?: string;
+  reason?: string;
 };
 
-export type ForecastRefreshPayload = {
+export type StockSyncPayload = {
   organizationId?: string;
-  horizonDays?: number;
+  productId?: string;
+  source?: WebhookSource;
+  reason?: string;
 };
 
 export type JobPayloadByName = {
   "shopify.webhook.received": WebhookReceivedPayload;
   "woocommerce.webhook.received": WebhookReceivedPayload;
+  "integrations.stock-sync.dispatch": StockSyncPayload;
   "inventory.reorder.evaluate": ReorderEvaluatePayload;
   "notifications.low-stock.dispatch": NotificationPayload;
-  "forecast.demand.refresh": ForecastRefreshPayload;
+  "notifications.order-status.dispatch": NotificationPayload;
 };
 
 export type QueueJob<TName extends JobName = JobName> = {

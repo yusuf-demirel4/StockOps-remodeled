@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { createInitialState } from "@stockops/core/demo-data";
 import type { WebhookReceivedJobName } from "@stockops/core/jobs";
 import { hashToken } from "@stockops/core/tokens";
@@ -7,6 +7,11 @@ import type {
   WebhookEvent,
   WebhookSource,
 } from "@stockops/core/types";
+import {
+  normalizeWebhookHeaders,
+  verifyProviderWebhookSignature,
+  webhookHeader,
+} from "@stockops/core/webhooks";
 import { getPrisma } from "@stockops/db";
 import { publishJob } from "@stockops/queue";
 
@@ -28,21 +33,6 @@ function normalizeSource(source: PublicWebhookSource): WebhookSource {
   return source === "shopify" ? "SHOPIFY" : "WOOCOMMERCE";
 }
 
-function normalizeHeaders(headers: HeaderBag) {
-  return Object.fromEntries(
-    Object.entries(headers)
-      .filter(([, value]) => value !== undefined)
-      .map(([key, value]) => [
-        key.toLowerCase(),
-        Array.isArray(value) ? value.join(",") : String(value),
-      ]),
-  );
-}
-
-function header(headers: Record<string, string>, key: string) {
-  return headers[key.toLowerCase()];
-}
-
 function jsonValue(value: unknown) {
   return JSON.parse(JSON.stringify(value ?? null));
 }
@@ -54,13 +44,13 @@ function externalIdFor(
 ) {
   if (source === "SHOPIFY") {
     return (
-      header(headers, "x-shopify-webhook-id") ??
-      header(headers, "x-shopify-event-id")
+      webhookHeader(headers, "x-shopify-webhook-id") ??
+      webhookHeader(headers, "x-shopify-event-id")
     );
   }
 
   if (source === "WOOCOMMERCE") {
-    return header(headers, "x-wc-webhook-delivery-id");
+    return webhookHeader(headers, "x-wc-webhook-delivery-id");
   }
 
   if (
@@ -92,9 +82,23 @@ export class WebhookInboxService {
     topic: string | undefined,
     body: unknown,
     rawHeaders: HeaderBag,
+    rawBody?: Buffer,
   ) {
     const normalizedSource = normalizeSource(source);
-    const headers = normalizeHeaders(rawHeaders);
+    const headers = normalizeWebhookHeaders(rawHeaders);
+    const verification = verifyProviderWebhookSignature(
+      normalizedSource,
+      rawBody,
+      headers,
+      providerSecret(normalizedSource),
+    );
+
+    if (verification.configured && !verification.valid) {
+      throw new ForbiddenException(
+        `Invalid ${normalizedSource.toLowerCase()} webhook signature.`,
+      );
+    }
+
     const eventTopic = topic ?? "unknown";
     const externalId = externalIdFor(normalizedSource, headers, body);
     const dedupeKey = dedupeKeyFor(normalizedSource, eventTopic, body, externalId);
@@ -107,6 +111,7 @@ export class WebhookInboxService {
         headers,
         dedupeKey,
         externalId,
+        verification.configured,
       );
     }
 
@@ -117,6 +122,7 @@ export class WebhookInboxService {
       headers,
       dedupeKey,
       externalId,
+      verification.configured,
     );
   }
 
@@ -127,6 +133,7 @@ export class WebhookInboxService {
     headers: Record<string, string>,
     dedupeKey: string,
     externalId?: string,
+    verified = false,
   ) {
     const state = demoState();
     const organization = state.organizations[0];
@@ -135,7 +142,7 @@ export class WebhookInboxService {
     );
 
     if (duplicate) {
-      return this.response(duplicate.id, source, topic, true, organization.id);
+      return this.response(duplicate.id, source, topic, true, organization.id, verified);
     }
 
     const event: WebhookEvent = {
@@ -153,7 +160,7 @@ export class WebhookInboxService {
     };
 
     state.webhookEvents?.unshift(event);
-    return this.response(event.id, source, topic, false, organization.id);
+    return this.response(event.id, source, topic, false, organization.id, verified);
   }
 
   private async acceptDatabaseEvent(
@@ -163,6 +170,7 @@ export class WebhookInboxService {
     headers: Record<string, string>,
     dedupeKey: string,
     externalId?: string,
+    verified = false,
   ) {
     const prisma = getPrisma();
     const duplicate = await prisma.webhookEvent.findUnique({
@@ -170,7 +178,14 @@ export class WebhookInboxService {
     });
 
     if (duplicate) {
-      return this.response(duplicate.id, source, topic, true, duplicate.organizationId);
+      return this.response(
+        duplicate.id,
+        source,
+        topic,
+        true,
+        duplicate.organizationId,
+        verified,
+      );
     }
 
     const organization = await prisma.organization.findUnique({
@@ -195,7 +210,7 @@ export class WebhookInboxService {
       },
     });
 
-    return this.response(event.id, source, topic, false, organization.id);
+    return this.response(event.id, source, topic, false, organization.id, verified);
   }
 
   private async response(
@@ -204,6 +219,7 @@ export class WebhookInboxService {
     topic: string,
     duplicate: boolean,
     organizationId: string,
+    providerSignatureVerified: boolean,
   ) {
     const job = {
       name: jobNameFor(source),
@@ -230,6 +246,11 @@ export class WebhookInboxService {
           skipped: true,
         },
         receivedAt: new Date().toISOString(),
+        verification: {
+          providerSignature: providerSignatureVerified
+            ? "verified"
+            : "not-configured",
+        },
       };
     }
 
@@ -256,10 +277,19 @@ export class WebhookInboxService {
         name: queued.queueName,
       },
       receivedAt: new Date().toISOString(),
+      verification: {
+        providerSignature: providerSignatureVerified ? "verified" : "not-configured",
+      },
     };
   }
 }
 
 function id(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function providerSecret(source: WebhookSource) {
+  return source === "SHOPIFY"
+    ? process.env.SHOPIFY_WEBHOOK_SECRET
+    : process.env.WOOCOMMERCE_WEBHOOK_SECRET;
 }

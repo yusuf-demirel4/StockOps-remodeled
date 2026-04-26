@@ -1,4 +1,8 @@
 import type { JobName, QueueJob } from "@stockops/core/jobs";
+import {
+  handleLowStockNotificationDispatch,
+  handleOrderStatusNotificationDispatch,
+} from "./notification-dispatcher";
 import { handleWebhookReceived } from "./webhook-processor";
 
 export function createJob<TName extends JobName>(
@@ -25,9 +29,15 @@ export async function handleJob(job: QueueJob) {
     case "inventory.reorder.evaluate":
       return { status: "reorder-evaluated", jobId: job.id };
     case "notifications.low-stock.dispatch":
-      return { status: "notification-dispatched", jobId: job.id };
-    case "forecast.demand.refresh":
-      return { status: "forecast-refresh-scheduled", jobId: job.id };
+      return handleLowStockNotificationDispatch(
+        job as QueueJob<"notifications.low-stock.dispatch">,
+      );
+    case "notifications.order-status.dispatch":
+      return handleOrderStatusNotificationDispatch(
+        job as QueueJob<"notifications.order-status.dispatch">,
+      );
+    case "integrations.stock-sync.dispatch":
+      return { status: "stock-sync-dispatch-ready", jobId: job.id };
     default: {
       const exhaustive: never = job.name;
       return exhaustive;

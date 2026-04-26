@@ -8,7 +8,7 @@ Bu repo artik monorepo olarak duzenlenir:
 
 - `apps/web`: Next.js dashboard ve Server Actions tabanli yonetim arayuzu
 - `apps/api`: mobil uygulama, public API ve webhook girisleri icin NestJS API iskeleti
-- `apps/worker`: webhook, satin alma onerisi, bildirim ve AI forecast gibi arka plan isleri
+- `apps/worker`: webhook, stok senkronizasyonu ve bildirim gibi arka plan isleri
 - `packages/core`: domain tipleri, stok kurallari, validasyon, format ve demo veri
 - `packages/db`: Prisma schema, SQL migrations, seed ve paylasilan database client
 - `packages/queue`: memory ve BullMQ/Redis destekli job publish/worker adaptoru
@@ -23,9 +23,10 @@ Bu repo artik monorepo olarak duzenlenir:
 - Rol bazli yetki matrisi
 - Dashboard ve kritik stok uyarilari
 - API baslangici: `GET /v1/health`, `GET /v1/inventory/products`
-- Webhook baslangici: `POST /v1/webhooks/shopify`, `POST /v1/webhooks/woocommerce`
+- Shopify/WooCommerce webhook inbox ve provider imza dogrulama altyapisi
 - API auth: Bearer token + `organizationId` tabanli tenant izolasyonu + rol bazli yetki
 - Webhook inbox: event idempotency, `WebhookEvent` kaydi ve worker job kontrati
+- SMS/WhatsApp bildirim delivery modeli ve guvenli console/dry-run provider adapter
 - OpenAPI kontrati: Swagger UI ve JSON/YAML dokuman ciktilari
 - Queue kontrati: demo icin memory driver, production icin BullMQ/Redis driver
 
@@ -123,6 +124,27 @@ POST /v1/webhooks/woocommerce
 
 `WEBHOOK_SHARED_SECRET` degeri bos degilse webhook isteklerinde
 `X-StockOps-Webhook-Secret` header'i zorunlu olur.
+
+Provider imza dogrulama ayarlari:
+
+```env
+SHOPIFY_WEBHOOK_SECRET=""
+WOOCOMMERCE_WEBHOOK_SECRET=""
+```
+
+Bu degerlerden biri tanimliysa ilgili provider icin `X-Shopify-Hmac-Sha256`
+veya `X-WC-Webhook-Signature` header'i raw body uzerinden dogrulanir.
+
+Bildirim ayarlari:
+
+```env
+NOTIFICATION_PROVIDER="console"
+SMS_NOTIFICATION_RECIPIENT=""
+WHATSAPP_NOTIFICATION_RECIPIENT=""
+```
+
+`console` provider local ve staging icin guvenli dry-run davranisidir. Gercek
+SMS/WhatsApp gonderimi icin provider adapter ayni kontratla genisletilmelidir.
 
 ## Veritabani
 

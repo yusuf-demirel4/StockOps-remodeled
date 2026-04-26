@@ -38,6 +38,7 @@ import {
 import type {
   AppSnapshot,
   AuthContext,
+  NotificationDelivery,
   Product,
   PurchaseOrder,
   PurchaseOrderLine,
@@ -45,6 +46,7 @@ import type {
   StockMovement,
   StockMovementType,
   Supplier,
+  WebhookEvent,
   Warehouse,
 } from "@stockops/core/types";
 
@@ -138,6 +140,69 @@ function mapStockMovement(movement: {
   };
 }
 
+function mapWebhookEvent(event: {
+  id: string;
+  organizationId: string;
+  source: string;
+  topic: string;
+  externalId: string | null;
+  dedupeKey: string;
+  status: string;
+  payload: unknown;
+  headers: unknown;
+  error: string | null;
+  attempts: number;
+  receivedAt: Date;
+  processedAt: Date | null;
+}): WebhookEvent {
+  return {
+    id: event.id,
+    organizationId: event.organizationId,
+    source: event.source as WebhookEvent["source"],
+    topic: event.topic,
+    externalId: event.externalId ?? undefined,
+    dedupeKey: event.dedupeKey,
+    status: event.status as WebhookEvent["status"],
+    payload: event.payload,
+    headers:
+      event.headers && typeof event.headers === "object"
+        ? (event.headers as Record<string, string>)
+        : undefined,
+    error: event.error ?? undefined,
+    attempts: event.attempts,
+    receivedAt: iso(event.receivedAt),
+    processedAt: event.processedAt ? iso(event.processedAt) : undefined,
+  };
+}
+
+function mapNotificationDelivery(delivery: {
+  id: string;
+  organizationId: string;
+  channel: string;
+  provider: string;
+  recipient: string | null;
+  message: string;
+  status: string;
+  reason: string | null;
+  error: string | null;
+  createdAt: Date;
+  sentAt: Date | null;
+}): NotificationDelivery {
+  return {
+    id: delivery.id,
+    organizationId: delivery.organizationId,
+    channel: delivery.channel as NotificationDelivery["channel"],
+    provider: delivery.provider,
+    recipient: delivery.recipient ?? undefined,
+    message: delivery.message,
+    status: delivery.status as NotificationDelivery["status"],
+    reason: delivery.reason ?? undefined,
+    error: delivery.error ?? undefined,
+    createdAt: iso(delivery.createdAt),
+    sentAt: delivery.sentAt ? iso(delivery.sentAt) : undefined,
+  };
+}
+
 export async function getAppSnapshot(
   context: AuthContext,
 ): Promise<AppSnapshot> {
@@ -155,6 +220,8 @@ export async function getAppSnapshot(
     salesOrders,
     purchaseOrders,
     auditLogs,
+    webhookEvents,
+    notificationDeliveries,
   ] = await Promise.all([
     prisma.warehouse.findMany({
       where: { organizationId },
@@ -188,6 +255,16 @@ export async function getAppSnapshot(
       where: { organizationId },
       orderBy: { createdAt: "desc" },
       take: 8,
+    }),
+    prisma.webhookEvent.findMany({
+      where: { organizationId },
+      orderBy: { receivedAt: "desc" },
+      take: 12,
+    }),
+    prisma.notificationDelivery.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: "desc" },
+      take: 12,
     }),
   ]);
 
@@ -260,6 +337,8 @@ export async function getAppSnapshot(
       summary: auditLog.summary,
       createdAt: iso(auditLog.createdAt),
     })),
+    webhookEvents: webhookEvents.map(mapWebhookEvent),
+    notificationDeliveries: notificationDeliveries.map(mapNotificationDelivery),
     permissions: {
       canManageUsers: can(context.role, "manage_users"),
       canManageProducts: can(context.role, "manage_products"),

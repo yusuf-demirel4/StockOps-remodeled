@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@stockops/core": "*",
+    "@stockops/db": "*",
     "@stockops/queue": "*"
   },
   "devDependencies": {

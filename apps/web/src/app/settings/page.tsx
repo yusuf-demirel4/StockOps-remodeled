@@ -8,7 +8,12 @@ import {
 import { rolePermissions } from "@stockops/core/inventory";
 import { requireAuth } from "@/lib/auth";
 import { getAppSnapshot } from "@/lib/repository";
-import type { Permission, Role } from "@stockops/core/types";
+import type {
+  NotificationDeliveryStatus,
+  Permission,
+  Role,
+  WebhookEventStatus,
+} from "@stockops/core/types";
 
 const roleLabels: Record<Role, string> = {
   Owner: "Sahip",
@@ -26,6 +31,27 @@ const permissionLabels: Record<Permission, string> = {
   manage_sales: "Satış",
   manage_purchasing: "Satın alma",
   view_dashboard: "Dashboard",
+};
+
+const webhookStatusTone: Record<
+  WebhookEventStatus,
+  "neutral" | "success" | "warning" | "danger"
+> = {
+  FAILED: "danger",
+  IGNORED: "neutral",
+  PENDING: "warning",
+  PROCESSED: "success",
+  PROCESSING: "warning",
+};
+
+const notificationStatusTone: Record<
+  NotificationDeliveryStatus,
+  "neutral" | "success" | "warning" | "danger"
+> = {
+  FAILED: "danger",
+  PENDING: "warning",
+  SENT: "success",
+  SKIPPED: "neutral",
 };
 
 export const dynamic = "force-dynamic";
@@ -100,6 +126,100 @@ export default async function SettingsPage() {
               <WarehouseCreateForm />
             </Panel>
           ) : null}
+
+          <Panel title="P2 entegrasyon inbox">
+            {snapshot.webhookEvents.length === 0 ? (
+              <EmptyState>Webhook kaydi bulunmuyor.</EmptyState>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[860px] text-left text-sm">
+                  <thead className="text-xs uppercase text-[#6a746f]">
+                    <tr className="border-b border-[#e3e5dd]">
+                      <th className="py-2 pr-3">Kaynak</th>
+                      <th className="py-2 pr-3">Topic</th>
+                      <th className="py-2 pr-3">Durum</th>
+                      <th className="py-2 pr-3">Deneme</th>
+                      <th className="py-2 pr-3">External ID</th>
+                      <th className="py-2">Hata</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {snapshot.webhookEvents.map((event) => (
+                      <tr
+                        className="border-b border-[#eef0ea] align-top last:border-0"
+                        key={event.id}
+                      >
+                        <td className="py-3 pr-3 font-mono text-xs">
+                          {event.source}
+                        </td>
+                        <td className="py-3 pr-3">{event.topic}</td>
+                        <td className="py-3 pr-3">
+                          <StatusBadge tone={webhookStatusTone[event.status]}>
+                            {event.status}
+                          </StatusBadge>
+                        </td>
+                        <td className="py-3 pr-3 font-mono text-xs">
+                          {event.attempts}
+                        </td>
+                        <td className="max-w-[220px] truncate py-3 pr-3 font-mono text-xs">
+                          {event.externalId ?? "-"}
+                        </td>
+                        <td className="max-w-[260px] py-3 text-[#8a3a28]">
+                          {event.error ?? "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+
+          <Panel title="Bildirim teslimatlari">
+            {snapshot.notificationDeliveries.length === 0 ? (
+              <EmptyState>Bildirim teslimat kaydi bulunmuyor.</EmptyState>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[860px] text-left text-sm">
+                  <thead className="text-xs uppercase text-[#6a746f]">
+                    <tr className="border-b border-[#e3e5dd]">
+                      <th className="py-2 pr-3">Kanal</th>
+                      <th className="py-2 pr-3">Provider</th>
+                      <th className="py-2 pr-3">Durum</th>
+                      <th className="py-2 pr-3">Alici</th>
+                      <th className="py-2">Mesaj</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {snapshot.notificationDeliveries.map((delivery) => (
+                      <tr
+                        className="border-b border-[#eef0ea] align-top last:border-0"
+                        key={delivery.id}
+                      >
+                        <td className="py-3 pr-3 font-mono text-xs">
+                          {delivery.channel}
+                        </td>
+                        <td className="py-3 pr-3">{delivery.provider}</td>
+                        <td className="py-3 pr-3">
+                          <StatusBadge
+                            tone={notificationStatusTone[delivery.status]}
+                          >
+                            {delivery.status}
+                          </StatusBadge>
+                        </td>
+                        <td className="py-3 pr-3 font-mono text-xs">
+                          {delivery.recipient ?? delivery.reason ?? "-"}
+                        </td>
+                        <td className="max-w-[360px] py-3">
+                          {delivery.message}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
 
           <Panel title="Rol matrisi">
             <div className="overflow-x-auto">

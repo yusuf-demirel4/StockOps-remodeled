@@ -7,6 +7,7 @@ import {
   getMemoryQueueJobs,
   resetQueuePublisherForTests,
 } from "@stockops/queue";
+import { hmacSha256Base64 } from "@stockops/core/webhooks";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -23,6 +24,8 @@ describe("StockOps API P0 flows", () => {
     process.env.API_DEMO_TOKEN = token;
     process.env.STOCKOPS_QUEUE_DRIVER = "memory";
     process.env.STOCKOPS_QUEUE_NAME = "stockops.test";
+    delete process.env.SHOPIFY_WEBHOOK_SECRET;
+    delete process.env.WOOCOMMERCE_WEBHOOK_SECRET;
     delete (globalThis as { stockOpsApiState?: unknown }).stockOpsApiState;
     delete (globalThis as { stockOpsApiWebhookState?: unknown })
       .stockOpsApiWebhookState;
@@ -33,7 +36,7 @@ describe("StockOps API P0 flows", () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleRef.createNestApplication({ logger: false });
+    app = moduleRef.createNestApplication({ logger: false, rawBody: true });
     app.setGlobalPrefix("v1");
     await app.init();
   });
@@ -392,6 +395,45 @@ describe("StockOps API P0 flows", () => {
           queue: {
             reason: "duplicate-webhook-event",
             skipped: true,
+          },
+        });
+      });
+
+    expect(getMemoryQueueJobs()).toHaveLength(1);
+  });
+
+  it("verifies provider webhook signatures when provider secrets are configured", async () => {
+    process.env.SHOPIFY_WEBHOOK_SECRET = "shopify-webhook-secret";
+    const rawBody = JSON.stringify({
+      admin_graphql_api_id: "gid://shopify/Order/1001",
+      line_items: [{ quantity: 1, sku: "KBD-MX-001" }],
+    });
+
+    await request(app.getHttpServer())
+      .post("/v1/webhooks/shopify")
+      .set("Content-Type", "application/json")
+      .set("X-Shopify-Topic", "orders/create")
+      .set("X-Shopify-Webhook-Id", "signed-shopify-webhook")
+      .set("X-Shopify-Hmac-Sha256", "bad-signature")
+      .send(rawBody)
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post("/v1/webhooks/shopify")
+      .set("Content-Type", "application/json")
+      .set("X-Shopify-Topic", "orders/create")
+      .set("X-Shopify-Webhook-Id", "signed-shopify-webhook")
+      .set(
+        "X-Shopify-Hmac-Sha256",
+        hmacSha256Base64(Buffer.from(rawBody), "shopify-webhook-secret"),
+      )
+      .send(rawBody)
+      .expect(202)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          duplicate: false,
+          verification: {
+            providerSignature: "verified",
           },
         });
       });

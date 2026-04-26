@@ -1,11 +1,11 @@
 export { jobNames } from "@stockops/core/jobs";
 export type {
-  ForecastRefreshPayload,
   JobName,
   JobPayloadByName,
   NotificationPayload,
   QueueJob,
   ReorderEvaluatePayload,
+  StockSyncPayload,
   WebhookReceivedJobName,
   WebhookReceivedPayload,
 } from "@stockops/core/jobs";

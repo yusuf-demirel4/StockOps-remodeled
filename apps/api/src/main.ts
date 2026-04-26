@@ -11,6 +11,7 @@ async function bootstrap() {
       process.env.NODE_ENV === "test"
         ? false
         : ["log", "error", "warn", "debug", "verbose"],
+    rawBody: true,
   });
 
   app.setGlobalPrefix("v1");

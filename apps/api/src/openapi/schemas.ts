@@ -419,6 +419,7 @@ export const webhookAcceptedResponseSchema: SchemaObject = {
     "job",
     "queue",
     "receivedAt",
+    "verification",
   ],
   properties: {
     accepted: { type: "boolean", example: true },
@@ -457,6 +458,17 @@ export const webhookAcceptedResponseSchema: SchemaObject = {
       },
     },
     receivedAt: isoDateTime("2026-04-25T12:00:00.000Z"),
+    verification: {
+      type: "object",
+      required: ["providerSignature"],
+      properties: {
+        providerSignature: {
+          type: "string",
+          enum: ["verified", "not-configured"],
+          example: "verified",
+        },
+      },
+    },
   },
 };
 
