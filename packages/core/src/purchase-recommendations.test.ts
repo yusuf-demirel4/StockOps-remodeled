@@ -10,6 +10,7 @@ const mouse = {
   category: "Accessory",
   minimumStock: 10,
   isActive: true,
+        unitPrice: 0,
 };
 
 const keyboard = {
@@ -20,6 +21,7 @@ const keyboard = {
   category: "Accessory",
   minimumStock: 5,
   isActive: true,
+        unitPrice: 0,
 };
 
 const snapshot = {

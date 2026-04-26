@@ -7,7 +7,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiOkResponse, ApiOperation, ApiParam, ApiTags } from "@nestjs/swagger";
-import type { AuthContext } from "@stockops/core/types";
+import type { AuthContext, Invoice, Customer } from "@stockops/core/types";
 import {
   exportProductsCSV,
   exportStockCSV,
@@ -44,7 +44,7 @@ export class ExportsController {
   @ApiOkResponse({ description: "CSV file" })
   async productsCSV(@CurrentAuth() ctx: AuthContext, @Res() res: Response) {
     const products = await this.stockOps.listProducts(ctx);
-    const items = Array.isArray(products) ? products : products.data;
+    const items = products;
     const csv = exportProductsCSV(items);
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="products.csv"');
@@ -81,7 +81,7 @@ export class ExportsController {
   @ApiOkResponse({ description: "CSV file" })
   async customersCSV(@CurrentAuth() ctx: AuthContext, @Res() res: Response) {
     const customers = await this.stockOps.listCustomers(ctx);
-    const items = Array.isArray(customers) ? customers : customers.data;
+    const items = customers;
     const csv = exportCustomersCSV(items);
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="customers.csv"');
@@ -96,7 +96,7 @@ export class ExportsController {
   @ApiOkResponse({ description: "XLSX file" })
   async productsExcel(@CurrentAuth() ctx: AuthContext, @Res() res: Response) {
     const products = await this.stockOps.listProducts(ctx);
-    const items = Array.isArray(products) ? products : products.data;
+    const items = products;
     const buffer = await exportProductsExcel(items);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", 'attachment; filename="products.xlsx"');
@@ -128,15 +128,15 @@ export class ExportsController {
     @Res() res: Response,
   ) {
     const invoices = await this.stockOps.listInvoices(ctx);
-    const allInvoices = Array.isArray(invoices) ? invoices : invoices.data;
-    const invoice = allInvoices.find((inv) => inv.id === invoiceId);
+    const allInvoices = invoices;
+    const invoice = allInvoices.find((i) => i.id === invoiceId) as Invoice;
     if (!invoice) {
       res.status(404).json({ message: "Invoice not found." });
       return;
     }
 
     const customers = await this.stockOps.listCustomers(ctx);
-    const allCustomers = Array.isArray(customers) ? customers : customers.data;
+    const allCustomers = customers;
     const customer = allCustomers.find((c) => c.id === invoice.customerId);
     if (!customer) {
       res.status(404).json({ message: "Customer not found." });
@@ -144,7 +144,7 @@ export class ExportsController {
     }
 
     const products = await this.stockOps.listProducts(ctx);
-    const allProducts = Array.isArray(products) ? products : products.data;
+    const allProducts = products;
     const productMap = new Map(allProducts.map((p) => [p.id, p]));
 
     const pdf = generateInvoicePDF({
@@ -159,3 +159,4 @@ export class ExportsController {
     pdf.pipe(res);
   }
 }
+

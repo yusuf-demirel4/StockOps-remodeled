@@ -164,7 +164,7 @@ export type InvoicePDFOptions = {
   logoPath?: string;
 };
 
-export function generateInvoicePDF(options: InvoicePDFOptions): PDFDocument {
+export function generateInvoicePDF(options: InvoicePDFOptions): typeof PDFDocument {
   const {
     invoice,
     customer,

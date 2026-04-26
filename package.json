@@ -34,5 +34,8 @@
   },
   "devDependencies": {
     "turbo": "^2.8.0"
+  },
+  "dependencies": {
+    "@google/genai": "^1.50.1"
   }
 }

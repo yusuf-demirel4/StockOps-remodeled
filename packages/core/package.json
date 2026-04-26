@@ -8,6 +8,7 @@
     "./barcode": "./src/barcode.ts",
     "./dashboard": "./src/dashboard.ts",
     "./demo-data": "./src/demo-data.ts",
+    "./export": "./src/export.ts",
     "./format": "./src/format.ts",
     "./inventory": "./src/inventory.ts",
     "./jobs": "./src/jobs.ts",
@@ -25,10 +26,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
+    "pdfkit": "^0.18.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/pdfkit": "^0.17.6",
     "typescript": "^5",
     "vitest": "^4.1.5"
   }

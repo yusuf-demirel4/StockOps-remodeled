@@ -14,6 +14,7 @@ const row: StockRow = {
     name: "27 inch Monitor",
     organizationId: "org_kernel_guard",
     sku: "MON-27-4K",
+    unitPrice: 0,
   },
   warehouse: {
     code: "MAIN",

@@ -3,10 +3,12 @@ import {
   BarChart3,
   Boxes,
   ClipboardList,
+  FileText,
   LogOut,
   Package,
   Settings,
   Truck,
+  Users,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { signOutAction } from "@/lib/actions";
@@ -16,7 +18,9 @@ const navigation = [
   { href: "/", label: "Dashboard", icon: BarChart3 },
   { href: "/products", label: "Ürünler", icon: Package },
   { href: "/inventory", label: "Stok", icon: Boxes },
+  { href: "/customers", label: "Müşteriler", icon: Users },
   { href: "/orders", label: "Siparişler", icon: ClipboardList },
+  { href: "/invoices", label: "Faturalar", icon: FileText },
   { href: "/suppliers", label: "Tedarikçiler", icon: Truck },
   { href: "/settings", label: "Ayarlar", icon: Settings },
 ];

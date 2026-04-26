@@ -478,3 +478,113 @@ export function arrayOf(items: SchemaObject): SchemaObject {
     items,
   };
 }
+
+
+export const customerSchema: SchemaObject = {
+  type: "object",
+  required: ["id", "organizationId", "code", "name", "paymentTermDays", "isActive", "createdAt"],
+  properties: {
+    id: id("cus_001"),
+    organizationId: id("org_kernelguard"),
+    code: { type: "string", example: "C-0001" },
+    name: { type: "string", example: "Acme Corp" },
+    email: nullableString("acme@example.com"),
+    phone: nullableString("+1 555 1234"),
+    taxId: nullableString("1234567890"),
+    address: nullableString("123 Acme St"),
+    paymentTermDays: { type: "integer", example: 30 },
+    isActive: { type: "boolean", example: true },
+    createdAt: isoDateTime("2026-04-25T12:00:00.000Z"),
+  },
+};
+
+export const customerCreateBodySchema: SchemaObject = {
+  type: "object",
+  additionalProperties: false,
+  required: ["code", "name"],
+  properties: {
+    code: { type: "string", minLength: 2, maxLength: 20, example: "C-0001" },
+    name: { type: "string", minLength: 2, example: "Acme Corp" },
+    email: { type: "string", format: "email", example: "acme@example.com" },
+    phone: { type: "string", example: "+1 555 1234" },
+    taxId: { type: "string", example: "1234567890" },
+    address: { type: "string", example: "123 Acme St" },
+    paymentTermDays: { type: "integer", minimum: 0, maximum: 365, example: 30 },
+  },
+};
+
+export const customerUpdateBodySchema: SchemaObject = {
+  type: "object",
+  additionalProperties: false,
+  minProperties: 1,
+  properties: customerCreateBodySchema.properties,
+};
+
+export const invoiceSchema: SchemaObject = {
+  type: "object",
+  required: ["id", "organizationId", "customerId", "code", "status", "subtotal", "discountAmount", "taxRate", "taxAmount", "total", "currency", "lines", "createdAt"],
+  properties: {
+    id: id("inv_001"),
+    organizationId: id("org_kernelguard"),
+    customerId: id("cus_001"),
+    code: { type: "string", example: "INV-0001" },
+    status: {
+      type: "string",
+      enum: ["DRAFT", "SENT", "PAID", "PARTIALLY_PAID", "OVERDUE", "CANCELLED"],
+      example: "DRAFT",
+    },
+    issuedAt: nullableString("2026-04-25T12:00:00.000Z"),
+    dueDate: nullableString("2026-05-25T12:00:00.000Z"),
+    subtotal: { type: "number", example: 100.00 },
+    discountAmount: { type: "number", example: 0.00 },
+    taxRate: { type: "number", example: 0.20 },
+    taxAmount: { type: "number", example: 20.00 },
+    total: { type: "number", example: 120.00 },
+    currency: { type: "string", example: "TRY" },
+    notes: nullableString("Thank you for your business."),
+    lines: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["productId", "quantity", "unitPrice", "discount", "lineTotal"],
+        properties: {
+          id: id("invl_001"),
+          productId: id("prd_001"),
+          description: nullableString("Item description"),
+          quantity: { type: "integer", minimum: 1, example: 2 },
+          unitPrice: { type: "number", example: 50.00 },
+          discount: { type: "number", example: 0.00 },
+          lineTotal: { type: "number", example: 100.00 },
+        },
+      },
+    },
+    createdAt: isoDateTime("2026-04-25T12:00:00.000Z"),
+  },
+};
+
+export const invoiceCreateBodySchema: SchemaObject = {
+  type: "object",
+  additionalProperties: false,
+  required: ["customerId", "lines"],
+  properties: {
+    customerId: id("cus_001"),
+    dueDate: { type: "string", format: "date", example: "2026-05-25" },
+    taxRate: { type: "number", minimum: 0, maximum: 1, example: 0.20 },
+    currency: { type: "string", example: "TRY" },
+    notes: { type: "string", example: "Thank you for your business." },
+    lines: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["productId", "quantity", "unitPrice"],
+        properties: {
+          productId: id("prd_001"),
+          description: { type: "string", example: "Item description" },
+          quantity: { type: "integer", minimum: 1, example: 2 },
+          unitPrice: { type: "number", minimum: 0, example: 50.00 },
+          discount: { type: "number", minimum: 0, maximum: 100, example: 0.00 },
+        },
+      },
+    },
+  },
+};

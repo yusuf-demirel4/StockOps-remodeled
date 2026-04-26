@@ -258,8 +258,8 @@ export function createProduct(input: unknown, context?: AuthContext) {
     organizationId: organization.id,
     barcode: parsed.barcode || undefined,
     isActive: true,
-  };
-
+    unitPrice: 0,
+    };
   appState.products.unshift(product);
   audit({
     organizationId: organization.id,

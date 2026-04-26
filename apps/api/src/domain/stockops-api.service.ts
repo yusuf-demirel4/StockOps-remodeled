@@ -22,6 +22,9 @@ import {
   supplierUpdateInputSchema,
   warehouseInputSchema,
   warehouseUpdateInputSchema,
+  customerInputSchema,
+  customerUpdateInputSchema,
+  invoiceInputSchema,
 } from "@stockops/core/schemas";
 import type {
   AppState,
@@ -102,6 +105,7 @@ function mapProduct(product: {
   description: string | null;
   minimumStock: number;
   isActive: boolean;
+  unitPrice?: any;
 }): Product {
   return {
     id: product.id,
@@ -113,6 +117,7 @@ function mapProduct(product: {
     description: product.description ?? undefined,
     minimumStock: product.minimumStock,
     isActive: product.isActive,
+    unitPrice: Number(product.unitPrice || 0),
   };
 }
 
@@ -243,6 +248,7 @@ export class StockOpsApiService {
       organizationId: context.organization.id,
       barcode: parsed.barcode || undefined,
       isActive: true,
+      unitPrice: 0,
     };
 
     state.products.unshift(product);
@@ -1214,6 +1220,200 @@ export class StockOpsApiService {
     });
     order.status = "COMPLETED";
     return order;
+  }
+
+  
+  async listCustomers(context: AuthContext, query?: any) {
+    if (dbMode()) {
+      const customers = await getPrisma().customer.findMany({
+        where: { organizationId: context.organization.id },
+        orderBy: { name: "asc" },
+      });
+      return customers.map((c) => ({
+        ...c,
+        email: c.email ?? undefined,
+        phone: c.phone ?? undefined,
+        taxId: c.taxId ?? undefined,
+        address: c.address ?? undefined,
+        createdAt: c.createdAt.toISOString(),
+      }));
+    }
+    return demoState().customers.filter((c) => c.organizationId === context.organization.id);
+  }
+
+  async createCustomer(input: unknown, context: AuthContext) {
+    const parsed = parseInput(customerInputSchema, input);
+    if (dbMode()) {
+      const customer = await getPrisma().customer.create({
+        data: {
+          organizationId: context.organization.id,
+          code: parsed.code,
+          name: parsed.name,
+          email: parsed.email || null,
+          phone: parsed.phone || null,
+          taxId: parsed.taxId || null,
+          address: parsed.address || null,
+          paymentTermDays: parsed.paymentTermDays,
+        },
+      });
+      await this.audit(context, "CREATE", "Customer", customer.id, customer.name);
+      return customer;
+    }
+    const customer = {
+      ...parsed,
+      id: id("cus"),
+      organizationId: context.organization.id,
+      email: parsed.email || undefined,
+      phone: parsed.phone || undefined,
+      taxId: parsed.taxId || undefined,
+      address: parsed.address || undefined,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    };
+    demoState().customers.unshift(customer);
+    return customer;
+  }
+
+  async updateCustomer(customerId: string, input: unknown, context: AuthContext) {
+    const parsed = parseInput(customerUpdateInputSchema, input);
+    if (dbMode()) {
+      const customer = await getPrisma().customer.findFirst({
+        where: { id: customerId, organizationId: context.organization.id },
+      });
+      if (!customer) throw new NotFoundException("Customer not found.");
+      
+      const updated = await getPrisma().customer.update({
+        where: { id: customerId },
+        data: {
+          code: parsed.code,
+          name: parsed.name,
+          email: parsed.email === undefined ? undefined : parsed.email || null,
+          phone: parsed.phone === undefined ? undefined : parsed.phone || null,
+          taxId: parsed.taxId === undefined ? undefined : parsed.taxId || null,
+          address: parsed.address === undefined ? undefined : parsed.address || null,
+          paymentTermDays: parsed.paymentTermDays,
+        },
+      });
+      await this.audit(context, "UPDATE", "Customer", updated.id, updated.name);
+      return updated;
+    }
+    const customer = demoState().customers.find((c) => c.id === customerId && c.organizationId === context.organization.id);
+    if (!customer) throw new NotFoundException("Customer not found.");
+    Object.assign(customer, {
+      ...parsed,
+      email: parsed.email === "" ? undefined : parsed.email,
+    });
+    return customer;
+  }
+
+  async listInvoices(context: AuthContext, query?: any) {
+    if (dbMode()) {
+      const invoices = await getPrisma().invoice.findMany({
+        where: { organizationId: context.organization.id },
+        include: { lines: true },
+        orderBy: { createdAt: "desc" },
+      });
+      return invoices.map(inv => ({
+        ...inv,
+        subtotal: Number(inv.subtotal),
+        discountAmount: Number(inv.discountAmount),
+        taxRate: Number(inv.taxRate),
+        taxAmount: Number(inv.taxAmount),
+        total: Number(inv.total),
+        lines: inv.lines.map(l => ({
+          ...l,
+          unitPrice: Number(l.unitPrice),
+          discount: Number(l.discount),
+          lineTotal: Number(l.lineTotal),
+        })),
+        createdAt: inv.createdAt.toISOString(),
+      }));
+    }
+    return demoState().invoices.filter((i) => i.organizationId === context.organization.id);
+  }
+
+  async createInvoice(input: unknown, context: AuthContext) {
+    const parsed = parseInput(invoiceInputSchema, input);
+    
+    // Calculate totals
+    let subtotal = 0;
+    const linesWithTotals = parsed.lines.map(line => {
+      const lineTotal = line.quantity * line.unitPrice * (1 - (line.discount || 0) / 100);
+      subtotal += lineTotal;
+      return { ...line, lineTotal };
+    });
+    
+    const taxAmount = subtotal * (parsed.taxRate || 0);
+    const total = subtotal + taxAmount;
+    
+    if (dbMode()) {
+      const count = await getPrisma().invoice.count({
+        where: { organizationId: context.organization.id },
+      });
+      const invoice = await getPrisma().invoice.create({
+        data: {
+          organizationId: context.organization.id,
+          customerId: parsed.customerId,
+          code: nextCode("INV", count),
+          status: "DRAFT",
+          dueDate: parsed.dueDate ? new Date(parsed.dueDate) : null,
+          currency: parsed.currency,
+          notes: parsed.notes,
+          taxRate: parsed.taxRate,
+          subtotal,
+          taxAmount,
+          total,
+          lines: {
+            create: linesWithTotals.map(l => ({
+              productId: l.productId,
+              description: l.description,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              discount: l.discount,
+              lineTotal: l.lineTotal,
+            })),
+          },
+        },
+        include: { lines: true },
+      });
+      await this.audit(context, "CREATE", "Invoice", invoice.id, invoice.code);
+      return {
+        ...invoice,
+        issuedAt: invoice.issuedAt?.toISOString(),
+        dueDate: invoice.dueDate?.toISOString(),
+        notes: invoice.notes ?? undefined,
+        subtotal: Number(invoice.subtotal),
+        discountAmount: Number(invoice.discountAmount),
+        taxRate: Number(invoice.taxRate),
+        taxAmount: Number(invoice.taxAmount),
+        total: Number(invoice.total),
+        lines: invoice.lines.map(l => ({
+          ...l,
+          unitPrice: Number(l.unitPrice),
+          discount: Number(l.discount),
+          lineTotal: Number(l.lineTotal),
+        })),
+        createdAt: invoice.createdAt.toISOString(),
+      };
+    }
+    
+    const invoice = {
+      ...parsed,
+      id: id("inv"),
+      organizationId: context.organization.id,
+      code: nextCode("INV", demoState().invoices.length),
+      status: "DRAFT" as const,
+      subtotal,
+      discountAmount: 0,
+      taxAmount,
+      total,
+      dueDate: parsed.dueDate || undefined,
+      notes: parsed.notes || undefined,
+      lines: linesWithTotals,
+      createdAt: new Date().toISOString(),
+    };
+    demoState().invoices.unshift(invoice);
+    return invoice;
   }
 
   private async listDatabaseProducts(context: AuthContext): Promise<Product[]> {

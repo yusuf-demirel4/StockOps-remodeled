@@ -27,13 +27,25 @@ export async function queryStockOnHand(
   organizationId: string,
   filter?: { productId?: string; warehouseId?: string },
 ): Promise<StockOnHandRow[]> {
-  const rows = await getPrisma().stockOnHand.findMany({
-    where: {
-      organizationId,
-      ...(filter?.productId ? { productId: filter.productId } : {}),
-      ...(filter?.warehouseId ? { warehouseId: filter.warehouseId } : {}),
-    },
-  });
+  const conditions = ["\"organizationId\" = $1"];
+  const params: unknown[] = [organizationId];
+
+  if (filter?.productId) {
+    params.push(filter.productId);
+    conditions.push(`"productId" = $${params.length}`);
+  }
+
+  if (filter?.warehouseId) {
+    params.push(filter.warehouseId);
+    conditions.push(`"warehouseId" = $${params.length}`);
+  }
+
+  const query = `
+    SELECT * FROM stock_on_hand
+    WHERE ${conditions.join(" AND ")}
+  `;
+
+  const rows = await getPrisma().$queryRawUnsafe<any[]>(query, ...params);
 
   return rows.map((row) => ({
     organizationId: row.organizationId,

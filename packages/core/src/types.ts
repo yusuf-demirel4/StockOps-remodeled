@@ -14,6 +14,21 @@ export type StockMovementType =
   | "PURCHASE_RECEIPT"
   | "TRANSFER";
 
+export type InvoiceStatus =
+  | "DRAFT"
+  | "SENT"
+  | "PAID"
+  | "PARTIALLY_PAID"
+  | "OVERDUE"
+  | "CANCELLED";
+
+export type PaymentMethod =
+  | "CASH"
+  | "BANK_TRANSFER"
+  | "CREDIT_CARD"
+  | "CHECK"
+  | "OTHER";
+
 export type SalesOrderStatus = "DRAFT" | "CONFIRMED" | "CANCELLED";
 export type PurchaseOrderStatus =
   | "DRAFT"
@@ -78,6 +93,13 @@ export type Product = {
   barcode?: string;
   category: string;
   description?: string;
+  unitPrice: number;
+  costPrice?: number;
+  averageCost?: number;
+  weight?: number;
+  dimensionL?: number;
+  dimensionW?: number;
+  dimensionH?: number;
   minimumStock: number;
   isActive: boolean;
 };
@@ -91,6 +113,59 @@ export type Supplier = {
   phone?: string;
   leadTimeDays: number;
   productIds: string[];
+};
+
+export type Customer = {
+  id: string;
+  organizationId: string;
+  code: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  taxId?: string;
+  address?: string;
+  paymentTermDays: number;
+  isActive: boolean;
+};
+
+export type Invoice = {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  code: string;
+  status: InvoiceStatus;
+  issuedAt?: string;
+  dueDate?: string;
+  subtotal: number;
+  discountAmount: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+  currency: string;
+  notes?: string;
+  lines: InvoiceLine[];
+  createdAt: string;
+};
+
+export type InvoiceLine = {
+  id?: string;
+  productId: string;
+  description?: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  lineTotal: number;
+};
+
+export type Payment = {
+  id: string;
+  organizationId: string;
+  invoiceId: string;
+  amount: number;
+  method: PaymentMethod;
+  reference?: string;
+  paidAt: string;
+  createdAt: string;
 };
 
 export type StockMovement = {
@@ -115,6 +190,7 @@ export type SalesOrder = {
   id: string;
   organizationId: string;
   code: string;
+  customerId?: string;
   customerName: string;
   status: SalesOrderStatus;
   lines: OrderLine[];
@@ -204,9 +280,11 @@ export type AppState = {
   warehouses: Warehouse[];
   products: Product[];
   suppliers: Supplier[];
+  customers: Customer[];
   stockMovements: StockMovement[];
   salesOrders: SalesOrder[];
   purchaseOrders: PurchaseOrder[];
+  invoices: Invoice[];
   auditLogs: AuditLog[];
   sessions: Session[];
   apiTokens?: ApiToken[];

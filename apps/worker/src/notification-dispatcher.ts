@@ -58,6 +58,7 @@ export async function handleLowStockNotificationDispatch(
       name: product.name,
       organizationId: product.organizationId,
       sku: product.sku,
+      unitPrice: Number(product.unitPrice),
     })),
     warehouses.map((warehouse) => ({
       code: warehouse.code,

@@ -84,6 +84,7 @@ function mapProduct(product: {
   description: string | null;
   minimumStock: number;
   isActive: boolean;
+  unitPrice?: any;
 }): Product {
   return {
     id: product.id,
@@ -95,6 +96,7 @@ function mapProduct(product: {
     description: product.description ?? undefined,
     minimumStock: product.minimumStock,
     isActive: product.isActive,
+    unitPrice: product.unitPrice ? Number(product.unitPrice) : 0,
   };
 }
 

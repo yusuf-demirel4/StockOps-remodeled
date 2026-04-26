@@ -96,6 +96,38 @@ export const purchaseOrderInputSchema = z.object({
   expectedDate: z.string().trim().optional(),
 });
 
+export const customerInputSchema = z.object({
+  code: z.string().trim().min(2).max(20),
+  name: z.string().trim().min(2),
+  email: z.string().trim().email().optional().or(z.literal("")),
+  phone: z.string().trim().optional(),
+  taxId: z.string().trim().optional(),
+  address: z.string().trim().optional(),
+  paymentTermDays: z.coerce.number().int().min(0).max(365).default(30),
+});
+
+export const customerUpdateInputSchema = customerInputSchema.partial().refine(
+  (value) => Object.keys(value).length > 0,
+  "At least one field is required.",
+);
+
+export const invoiceInputSchema = z.object({
+  customerId: z.string().min(1),
+  dueDate: z.string().trim().optional(),
+  taxRate: z.coerce.number().min(0).max(1).default(0),
+  currency: z.string().trim().default("TRY"),
+  notes: z.string().trim().optional(),
+  lines: z.array(
+    z.object({
+      productId: z.string().min(1),
+      description: z.string().trim().optional(),
+      quantity: z.coerce.number().int().positive(),
+      unitPrice: z.coerce.number().min(0),
+      discount: z.coerce.number().min(0).max(100).default(0),
+    }),
+  ).min(1),
+});
+
 export const webhookSourceSchema = z.enum(["SHOPIFY", "WOOCOMMERCE"]);
 export const webhookEventStatusSchema = z.enum([
   "PENDING",

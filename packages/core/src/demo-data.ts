@@ -53,6 +53,7 @@ export function createInitialState(): AppState {
         category: "Aksesuar",
         minimumStock: 12,
         isActive: true,
+        unitPrice: 0,
       },
       {
         id: "prd_mouse_wireless",
@@ -63,6 +64,7 @@ export function createInitialState(): AppState {
         category: "Aksesuar",
         minimumStock: 20,
         isActive: true,
+        unitPrice: 0,
       },
       {
         id: "prd_monitor_27",
@@ -73,6 +75,7 @@ export function createInitialState(): AppState {
         category: "Ekran",
         minimumStock: 8,
         isActive: true,
+        unitPrice: 0,
       },
     ],
     suppliers: [
@@ -194,5 +197,7 @@ export function createInitialState(): AppState {
     sessions: [],
     webhookEvents: [],
     notificationDeliveries: [],
+    customers: [],
+    invoices: [],
   };
 }

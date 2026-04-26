@@ -12,6 +12,7 @@ const snapshot = {
       category: "Accessory",
       minimumStock: 5,
       isActive: true,
+        unitPrice: 0,
     },
     {
       id: "prd_mouse",
@@ -21,6 +22,7 @@ const snapshot = {
       category: "Accessory",
       minimumStock: 10,
       isActive: true,
+        unitPrice: 0,
     },
   ],
   warehouses: [
@@ -49,6 +51,7 @@ const snapshot = {
         category: "Accessory",
         minimumStock: 5,
         isActive: true,
+        unitPrice: 0,
       },
       warehouse: {
         id: "wh_main",
@@ -70,6 +73,7 @@ const snapshot = {
         category: "Accessory",
         minimumStock: 10,
         isActive: true,
+        unitPrice: 0,
       },
       warehouse: {
         id: "wh_main",
@@ -91,6 +95,7 @@ const snapshot = {
         category: "Accessory",
         minimumStock: 10,
         isActive: true,
+        unitPrice: 0,
       },
       warehouse: {
         id: "wh_showroom",

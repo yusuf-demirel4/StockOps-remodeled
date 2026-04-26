@@ -1,5 +1,6 @@
 import "reflect-metadata";
 
+import helmet from "helmet";
 import { NestFactory } from "@nestjs/core";
 
 import { AppModule } from "./app.module";
@@ -14,6 +15,7 @@ async function bootstrap() {
     rawBody: true,
   });
 
+  app.use(helmet());
   app.setGlobalPrefix("v1");
   app.enableCors({
     origin: process.env.API_CORS_ORIGIN?.split(",") ?? true,
