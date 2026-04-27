@@ -8,6 +8,12 @@ export const jobNames = [
   "inventory.reorder.evaluate",
   "notifications.low-stock.dispatch",
   "notifications.order-status.dispatch",
+  "xero.invoice.sync",
+  "xero.payment.sync",
+  "xero.product.sync",
+  "quickbooks.invoice.sync",
+  "quickbooks.payment.sync",
+  "quickbooks.product.sync",
 ] as const;
 
 export type JobName = (typeof jobNames)[number];
@@ -42,6 +48,12 @@ export type StockSyncPayload = {
   reason?: string;
 };
 
+export type AccountingSyncPayload = {
+  connectionId: string;
+  organizationId: string;
+  direction?: "push" | "pull";
+};
+
 export type JobPayloadByName = {
   "shopify.webhook.received": WebhookReceivedPayload;
   "woocommerce.webhook.received": WebhookReceivedPayload;
@@ -49,6 +61,12 @@ export type JobPayloadByName = {
   "inventory.reorder.evaluate": ReorderEvaluatePayload;
   "notifications.low-stock.dispatch": NotificationPayload;
   "notifications.order-status.dispatch": NotificationPayload;
+  "xero.invoice.sync": AccountingSyncPayload;
+  "xero.payment.sync": AccountingSyncPayload;
+  "xero.product.sync": AccountingSyncPayload;
+  "quickbooks.invoice.sync": AccountingSyncPayload;
+  "quickbooks.payment.sync": AccountingSyncPayload;
+  "quickbooks.product.sync": AccountingSyncPayload;
 };
 
 export type QueueJob<TName extends JobName = JobName> = {

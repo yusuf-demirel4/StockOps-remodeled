@@ -1,0 +1,32 @@
+{
+  "name": "@stockops/integration-quickbooks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./mappers": "./src/mappers.ts",
+    "./invoice-sync": "./src/invoice-sync.ts",
+    "./payment-sync": "./src/payment-sync.ts",
+    "./product-sync": "./src/product-sync.ts",
+    "./webhook-handler": "./src/webhook-handler.ts",
+    "./conflict-detector": "./src/conflict-detector.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@stockops/core": "*",
+    "@stockops/db": "*",
+    "@stockops/queue": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5",
+    "vitest": "^4.1.5"
+  }
+}

@@ -1,0 +1,14 @@
+node_modules
+.git
+.github
+.env
+.env.*
+!.env.example
+*.log
+dist
+.next
+.turbo
+coverage
+.vscode
+.idea
+docker

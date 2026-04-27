@@ -117,19 +117,24 @@ model Organization {
   suppliers              Supplier[]
   webhookEvents          WebhookEvent[]
   warehouses             Warehouse[]
+  accountingConnections  AccountingConnection[]
 }
 
 model User {
-  id             String          @id @default(cuid())
-  name           String
-  email          String          @unique
-  passwordHash   String?
-  createdAt      DateTime        @default(now())
-  apiTokens      ApiToken[]
-  auditLogs      AuditLog[]
-  memberships    Membership[]
-  sessions       Session[]
-  stockMovements StockMovement[]
+  id              String          @id @default(cuid())
+  name            String
+  email           String          @unique
+  passwordHash    String?
+  twoFactorEnabled Boolean        @default(false)
+  createdAt       DateTime        @default(now())
+  apiTokens       ApiToken[]
+  auditLogs       AuditLog[]
+  backupCodes     BackupCode[]
+  memberships     Membership[]
+  oauthAccounts   OAuthAccount[]
+  sessions        Session[]
+  stockMovements  StockMovement[]
+  totpSecret      TotpSecret?
 }
 
 model ApiToken {
@@ -154,6 +159,9 @@ model Session {
   userId         String
   organizationId String
   tokenHash      String       @unique
+  userAgent      String?
+  ipAddress      String?
+  lastActiveAt   DateTime     @default(now())
   expiresAt      DateTime
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -505,4 +513,96 @@ model Payment {
 
   @@index([organizationId, paidAt])
   @@index([invoiceId])
+}
+
+// ── 2FA ──
+
+model TotpSecret {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  encryptedSecret String
+  verified        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BackupCode {
+  id       String    @id @default(cuid())
+  userId   String
+  codeHash String
+  usedAt   DateTime?
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ── OAuth / SSO ──
+
+model OAuthAccount {
+  id             String    @id @default(cuid())
+  userId         String
+  provider       String
+  providerUserId String
+  accessToken    String?
+  refreshToken   String?
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+// ── Accounting Integrations ──
+
+enum AccountingProvider {
+  XERO
+  QUICKBOOKS
+}
+
+enum SyncDirection {
+  PUSH
+  PULL
+}
+
+enum SyncStatus {
+  SUCCESS
+  FAILED
+  CONFLICT
+}
+
+model AccountingConnection {
+  id             String             @id @default(cuid())
+  organizationId String
+  provider       AccountingProvider
+  tenantId       String
+  accessToken    String
+  refreshToken   String
+  tokenExpiresAt DateTime
+  lastSyncAt     DateTime?
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  syncLogs       AccountingSyncLog[]
+
+  @@unique([organizationId, provider])
+  @@index([organizationId])
+}
+
+model AccountingSyncLog {
+  id           String               @id @default(cuid())
+  connectionId String
+  direction    SyncDirection
+  entityType   String
+  entityId     String
+  externalId   String?
+  status       SyncStatus
+  error        String?
+  resolvedAt   DateTime?
+  createdAt    DateTime             @default(now())
+  connection   AccountingConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId, createdAt])
+  @@index([entityType, entityId])
 }
