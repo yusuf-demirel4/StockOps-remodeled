@@ -138,6 +138,8 @@ export function getDemoSnapshot(context: AuthContext): AppSnapshot {
     stockMovements,
     salesOrders,
     purchaseOrders,
+    salesReturns: [],
+    productVariants: [],
     stockRows,
     criticalRows,
     openSalesOrders: getOpenSalesOrders(salesOrders),

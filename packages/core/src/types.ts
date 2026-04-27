@@ -351,6 +351,8 @@ export type AppSnapshot = {
   stockMovements: StockMovement[];
   salesOrders: SalesOrder[];
   purchaseOrders: PurchaseOrder[];
+  salesReturns: SalesReturn[];
+  productVariants: ProductVariant[];
   stockRows: StockRow[];
   criticalRows: StockRow[];
   openSalesOrders: SalesOrder[];

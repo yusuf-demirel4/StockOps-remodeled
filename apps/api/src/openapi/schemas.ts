@@ -562,6 +562,112 @@ export const invoiceSchema: SchemaObject = {
   },
 };
 
+export const productVariantSchema: SchemaObject = {
+  type: "object",
+  required: ["id", "productId", "sku", "name", "unitPrice", "isActive", "attributes"],
+  properties: {
+    id: id("var_001"),
+    productId: id("prd_001"),
+    sku: { type: "string", example: "SKU-001-RED-XL" },
+    name: { type: "string", example: "Kırmızı / XL" },
+    barcode: nullableString("8690000000029"),
+    unitPrice: { type: "number", example: 49.9 },
+    costPrice: { type: "number", nullable: true, example: 28.0 },
+    weight: { type: "number", nullable: true, example: 0.25 },
+    isActive: { type: "boolean", example: true },
+    attributes: {
+      type: "object",
+      additionalProperties: { type: "string" },
+      example: { Renk: "Kırmızı", Beden: "XL" },
+    },
+  },
+};
+
+export const productVariantCreateBodySchema: SchemaObject = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sku", "name"],
+  properties: {
+    sku: { type: "string", minLength: 2, example: "SKU-001-RED-XL" },
+    name: { type: "string", minLength: 2, example: "Kırmızı / XL" },
+    barcode: { type: "string", example: "8690000000029" },
+    unitPrice: { type: "number", minimum: 0, example: 49.9 },
+    costPrice: { type: "number", minimum: 0, example: 28.0 },
+    weight: { type: "number", minimum: 0, example: 0.25 },
+    attributes: {
+      type: "string",
+      description: "JSON object string. Example: {\"Renk\":\"Kırmızı\"}",
+      example: "{\"Renk\":\"Kırmızı\",\"Beden\":\"XL\"}",
+    },
+  },
+};
+
+export const productVariantUpdateBodySchema: SchemaObject = {
+  type: "object",
+  additionalProperties: false,
+  minProperties: 1,
+  properties: productVariantCreateBodySchema.properties,
+};
+
+export const salesReturnSchema: SchemaObject = {
+  type: "object",
+  required: [
+    "id",
+    "organizationId",
+    "salesOrderId",
+    "code",
+    "status",
+    "lines",
+    "createdAt",
+  ],
+  properties: {
+    id: id("ret_001"),
+    organizationId: id("org_kernelguard"),
+    salesOrderId: id("so_001"),
+    code: { type: "string", example: "RET-1001" },
+    reason: nullableString("Customer changed mind"),
+    status: {
+      type: "string",
+      enum: ["DRAFT", "APPROVED", "COMPLETED", "CANCELLED"],
+      example: "DRAFT",
+    },
+    lines: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["productId", "quantity", "restocked"],
+        properties: {
+          productId: id("prd_001"),
+          quantity: { type: "integer", minimum: 1, example: 1 },
+          restocked: { type: "boolean", example: false },
+        },
+      },
+    },
+    createdAt: isoDateTime("2026-04-25T12:00:00.000Z"),
+  },
+};
+
+export const salesReturnCreateBodySchema: SchemaObject = {
+  type: "object",
+  additionalProperties: false,
+  required: ["lines"],
+  properties: {
+    reason: { type: "string", example: "Customer changed mind" },
+    lines: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        required: ["productId", "quantity"],
+        properties: {
+          productId: id("prd_001"),
+          quantity: { type: "integer", minimum: 1, example: 1 },
+        },
+      },
+    },
+  },
+};
+
 export const invoiceCreateBodySchema: SchemaObject = {
   type: "object",
   additionalProperties: false,

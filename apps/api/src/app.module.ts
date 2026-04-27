@@ -14,7 +14,9 @@ import { InventoryController } from "./inventory/inventory.controller";
 import { InvoicesController } from "./invoices/invoices.controller";
 import { PurchaseOrdersController } from "./orders/purchase-orders.controller";
 import { SalesOrdersController } from "./orders/sales-orders.controller";
+import { SalesReturnsController } from "./orders/sales-returns.controller";
 import { ProductsController } from "./products/products.controller";
+import { VariantsController } from "./products/variants.controller";
 import { EventsGateway } from "./realtime/events.gateway";
 import { StockController } from "./stock/stock.controller";
 import { SuppliersController } from "./suppliers/suppliers.controller";
@@ -39,8 +41,10 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     ProductsController,
     PurchaseOrdersController,
     SalesOrdersController,
+    SalesReturnsController,
     StockController,
     SuppliersController,
+    VariantsController,
     WebhooksController,
   ],
   providers: [
