@@ -97,7 +97,8 @@ function mapProduct(product: {
   description: string | null;
   minimumStock: number;
   isActive: boolean;
-  unitPrice?: number | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  unitPrice?: any;
 }): Product {
   return {
     id: product.id,

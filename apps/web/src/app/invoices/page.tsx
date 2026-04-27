@@ -29,6 +29,7 @@ export default async function InvoicesPage() {
       total: Number(inv.total),
       lines: inv.lines.map(l => ({
         ...l,
+        description: l.description ?? undefined,
         unitPrice: Number(l.unitPrice),
         discount: Number(l.discount),
         lineTotal: Number(l.lineTotal),
