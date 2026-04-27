@@ -365,7 +365,7 @@ export class StockOpsApiService {
         orderBy: { name: "asc" },
       });
 
-      return suppliers.map((supplier) => ({
+      return suppliers.map((supplier: any) => ({
         id: supplier.id,
         organizationId: supplier.organizationId,
         name: supplier.name,
@@ -373,7 +373,7 @@ export class StockOpsApiService {
         email: supplier.email ?? undefined,
         phone: supplier.phone ?? undefined,
         leadTimeDays: supplier.leadTimeDays,
-        productIds: supplier.products.map((item) => item.productId),
+        productIds: supplier.products.map((item: any) => item.productId),
       }));
     }
 
@@ -489,7 +489,7 @@ export class StockOpsApiService {
       const prisma = getPrisma();
 
       try {
-        return await prisma.$transaction(async (tx) => {
+        return await prisma.$transaction(async (tx: any) => {
           const warehouseCount = await tx.warehouse.count({
             where: { organizationId: context.organization.id },
           });
@@ -586,7 +586,7 @@ export class StockOpsApiService {
       }
 
       try {
-        return await prisma.$transaction(async (tx) => {
+        return await prisma.$transaction(async (tx: any) => {
           if (parsed.isDefault === true) {
             await tx.warehouse.updateMany({
               where: {
@@ -788,7 +788,7 @@ export class StockOpsApiService {
         ]);
       const reference = nextCode("TR", Math.floor(transferMovementCount / 2));
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         await tx.stockMovement.createMany({
           data: [
             {
@@ -892,14 +892,14 @@ export class StockOpsApiService {
         orderBy: { createdAt: "desc" },
       });
 
-      return orders.map((order) => ({
+      return orders.map((order: any) => ({
         id: order.id,
         organizationId: order.organizationId,
         code: order.code,
         customerName: order.customerName,
         status: order.status,
         createdAt: order.createdAt.toISOString(),
-        lines: order.lines.map((line) => ({
+        lines: order.lines.map((line: any) => ({
           productId: line.productId,
           quantity: line.quantity,
         })),
@@ -957,7 +957,7 @@ export class StockOpsApiService {
   async confirmSalesOrder(orderId: string, context: AuthContext) {
     if (dbMode()) {
       const prisma = getPrisma();
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         const order = await tx.salesOrder.findFirst({
           where: {
             id: orderId,
@@ -978,14 +978,14 @@ export class StockOpsApiService {
           where: {
             organizationId: context.organization.id,
             warehouseId: warehouse.id,
-            productId: { in: order.lines.map((line) => line.productId) },
+            productId: { in: order.lines.map((line: any) => line.productId) },
           },
         });
 
         assertEnoughStockForApi(
           movements.map(mapStockMovement),
           warehouse.id,
-          order.lines.map((line) => ({
+          order.lines.map((line: any) => ({
             productId: line.productId,
             quantity: line.quantity,
           })),
@@ -996,7 +996,7 @@ export class StockOpsApiService {
           data: { status: "CONFIRMED" },
         });
         await tx.stockMovement.createMany({
-          data: order.lines.map((line) => ({
+          data: order.lines.map((line: any) => ({
             organizationId: context.organization.id,
             warehouseId: warehouse.id,
             productId: line.productId,
@@ -1054,7 +1054,7 @@ export class StockOpsApiService {
         orderBy: { createdAt: "desc" },
       });
 
-      return orders.map((order) => ({
+      return orders.map((order: any) => ({
         id: order.id,
         organizationId: order.organizationId,
         supplierId: order.supplierId,
@@ -1062,7 +1062,7 @@ export class StockOpsApiService {
         status: order.status,
         expectedDate: order.expectedDate?.toISOString(),
         createdAt: order.createdAt.toISOString(),
-        lines: order.lines.map((line) => ({
+        lines: order.lines.map((line: any) => ({
           productId: line.productId,
           quantity: line.quantity,
           receivedQuantity: line.receivedQuantity,
@@ -1132,7 +1132,7 @@ export class StockOpsApiService {
   async receivePurchaseOrder(orderId: string, context: AuthContext) {
     if (dbMode()) {
       const prisma = getPrisma();
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         const order = await tx.purchaseOrder.findFirst({
           where: {
             id: orderId,
@@ -1150,15 +1150,15 @@ export class StockOpsApiService {
         }
 
         const receipts: PurchaseOrderLine[] = order.lines
-          .map((line) => ({
+          .map((line: any) => ({
             productId: line.productId,
             quantity: line.quantity,
             receivedQuantity: line.receivedQuantity,
           }))
-          .filter((line) => line.quantity > line.receivedQuantity);
+          .filter((line: any) => line.quantity > line.receivedQuantity);
 
         await Promise.all(
-          order.lines.map((line) =>
+          order.lines.map((line: any) =>
             tx.purchaseOrderLine.update({
               where: { id: line.id },
               data: { receivedQuantity: line.quantity },
@@ -1234,7 +1234,7 @@ export class StockOpsApiService {
         where: { organizationId: context.organization.id },
         orderBy: { name: "asc" },
       });
-      return customers.map((c) => ({
+      return customers.map((c: any) => ({
         ...c,
         email: c.email ?? undefined,
         phone: c.phone ?? undefined,
@@ -1318,14 +1318,14 @@ export class StockOpsApiService {
         include: { lines: true },
         orderBy: { createdAt: "desc" },
       });
-      return invoices.map(inv => ({
+      return invoices.map((inv: any) => ({
         ...inv,
         subtotal: Number(inv.subtotal),
         discountAmount: Number(inv.discountAmount),
         taxRate: Number(inv.taxRate),
         taxAmount: Number(inv.taxAmount),
         total: Number(inv.total),
-        lines: inv.lines.map(l => ({
+        lines: inv.lines.map((l: any) => ({
           ...l,
           unitPrice: Number(l.unitPrice),
           discount: Number(l.discount),
@@ -1392,7 +1392,7 @@ export class StockOpsApiService {
         taxRate: Number(invoice.taxRate),
         taxAmount: Number(invoice.taxAmount),
         total: Number(invoice.total),
-        lines: invoice.lines.map(l => ({
+        lines: invoice.lines.map((l: any) => ({
           ...l,
           unitPrice: Number(l.unitPrice),
           discount: Number(l.discount),
@@ -1444,7 +1444,7 @@ export class StockOpsApiService {
       orderBy: { createdAt: "asc" },
     });
 
-    return variants.map((variant) => ({
+    return variants.map((variant: any) => ({
       id: variant.id,
       productId: variant.productId,
       sku: variant.sku,
@@ -1669,7 +1669,7 @@ export class StockOpsApiService {
       orderBy: { createdAt: "desc" },
     });
 
-    return returns.map((salesReturn) => ({
+    return returns.map((salesReturn: any) => ({
       id: salesReturn.id,
       organizationId: salesReturn.organizationId,
       salesOrderId: salesReturn.salesOrderId,
@@ -1677,7 +1677,7 @@ export class StockOpsApiService {
       reason: salesReturn.reason ?? undefined,
       status: salesReturn.status,
       createdAt: salesReturn.createdAt.toISOString(),
-      lines: salesReturn.lines.map((line) => ({
+      lines: salesReturn.lines.map((line: any) => ({
         productId: line.productId,
         quantity: line.quantity,
         restocked: line.restocked,
@@ -1712,7 +1712,7 @@ export class StockOpsApiService {
 
     for (const line of parsed.lines) {
       const orderLine = order.lines.find(
-        (ol) => ol.productId === line.productId,
+        (ol: any) => ol.productId === line.productId,
       );
 
       if (!orderLine) {
@@ -1733,7 +1733,7 @@ export class StockOpsApiService {
     });
     const code = nextCode("RET", count);
 
-    const created = await prisma.$transaction(async (tx) => {
+    const created = await prisma.$transaction(async (tx: any) => {
       const salesReturn = await tx.salesReturn.create({
         data: {
           organizationId: context.organization.id,
@@ -1773,7 +1773,7 @@ export class StockOpsApiService {
       reason: created.reason ?? undefined,
       status: created.status,
       createdAt: created.createdAt.toISOString(),
-      lines: created.lines.map((line) => ({
+      lines: created.lines.map((line: any) => ({
         productId: line.productId,
         quantity: line.quantity,
         restocked: line.restocked,
@@ -1790,7 +1790,7 @@ export class StockOpsApiService {
 
     const prisma = getPrisma();
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       const salesReturn = await tx.salesReturn.findFirst({
         where: {
           id: returnId,
@@ -1818,7 +1818,7 @@ export class StockOpsApiService {
       }
 
       await tx.stockMovement.createMany({
-        data: salesReturn.lines.map((line) => ({
+        data: salesReturn.lines.map((line: any) => ({
           organizationId: context.organization.id,
           warehouseId: warehouse.id,
           productId: line.productId,
@@ -1831,7 +1831,7 @@ export class StockOpsApiService {
       });
 
       await Promise.all(
-        salesReturn.lines.map((line) =>
+        salesReturn.lines.map((line: any) =>
           tx.salesReturnLine.update({
             where: { id: line.id },
             data: { restocked: true },
@@ -1859,6 +1859,449 @@ export class StockOpsApiService {
     return (await this.listSalesReturns(context)).find(
       (item) => item.id === returnId,
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pick / Pack / Ship  (Phase 3)
+  // ---------------------------------------------------------------------------
+
+  async startPicking(orderId: string, context: AuthContext) {
+    const prisma = getPrisma();
+
+    return await prisma.$transaction(async (tx: any) => {
+      const order = await tx.salesOrder.findFirst({
+        where: {
+          id: orderId,
+          organizationId: context.organization.id,
+          status: "CONFIRMED",
+        },
+        include: { lines: true },
+      });
+
+      if (!order) {
+        throw new NotFoundException(
+          "Sales order not found or not in CONFIRMED status.",
+        );
+      }
+
+      const warehouse = await tx.warehouse.findFirst({
+        where: { organizationId: context.organization.id, isDefault: true },
+      });
+
+      if (!warehouse) {
+        throw new NotFoundException("Default warehouse not found.");
+      }
+
+      await tx.salesOrder.update({
+        where: { id: order.id },
+        data: { status: "PICKING" },
+      });
+
+      const pickList = await tx.pickList.create({
+        data: {
+          organizationId: context.organization.id,
+          warehouseId: warehouse.id,
+          status: "PENDING",
+          priority: 0,
+          items: {
+            create: order.lines.map((line: any) => ({
+              salesOrderId: order.id,
+              productId: line.productId,
+              quantity: line.quantity,
+              pickedQty: 0,
+            })),
+          },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: context.organization.id,
+          actorId: context.user.id,
+          action: "PICK",
+          entityType: "SalesOrder",
+          entityId: order.id,
+          summary: `${order.code} → PICKING, PickList ${pickList.id}`,
+        },
+      });
+
+      return { orderId: order.id, pickListId: pickList.id };
+    });
+  }
+
+  async listPickLists(
+    context: AuthContext,
+    filters: { status?: string; assignedTo?: string; cursor?: string; limit?: number },
+  ) {
+    const prisma = getPrisma();
+    const orgId = context.organization.id;
+    const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
+
+    const where: Record<string, unknown> = { organizationId: orgId };
+    if (filters.status) where.status = filters.status;
+    if (filters.assignedTo) where.assignedToId = filters.assignedTo;
+
+    const cursorArgs = filters.cursor
+      ? { skip: 1, cursor: { id: filters.cursor } }
+      : {};
+
+    const [total, pickLists] = await Promise.all([
+      prisma.pickList.count({ where }),
+      prisma.pickList.findMany({
+        where,
+        include: { items: true },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        ...cursorArgs,
+      } as any),
+    ]);
+
+    const hasMore = pickLists.length === limit;
+    const lastItem = pickLists[pickLists.length - 1];
+
+    return {
+      data: pickLists.map((pl: any) => ({
+        id: pl.id,
+        organizationId: pl.organizationId,
+        warehouseId: pl.warehouseId,
+        assignedToId: pl.assignedToId,
+        status: pl.status,
+        priority: pl.priority,
+        startedAt: pl.startedAt?.toISOString() ?? null,
+        completedAt: pl.completedAt?.toISOString() ?? null,
+        createdAt: pl.createdAt.toISOString(),
+        itemCount: pl.items.length,
+      })),
+      pagination: {
+        total,
+        limit,
+        cursor: hasMore && lastItem ? lastItem.id : null,
+        hasMore,
+      },
+    };
+  }
+
+  async getPickList(pickListId: string, context: AuthContext) {
+    const prisma = getPrisma();
+
+    const pickList = await prisma.pickList.findFirst({
+      where: {
+        id: pickListId,
+        organizationId: context.organization.id,
+      },
+      include: { items: true },
+    });
+
+    if (!pickList) {
+      throw new NotFoundException("Pick list not found.");
+    }
+
+    const total = pickList.items.reduce((sum: any, item: any) => sum + item.quantity, 0);
+    const picked = pickList.items.reduce((sum: any, item: any) => sum + item.pickedQty, 0);
+    const percentComplete = total === 0 ? 0 : Math.round((picked / total) * 100);
+
+    return {
+      id: pickList.id,
+      organizationId: pickList.organizationId,
+      warehouseId: pickList.warehouseId,
+      assignedToId: pickList.assignedToId,
+      status: pickList.status,
+      priority: pickList.priority,
+      startedAt: pickList.startedAt?.toISOString() ?? null,
+      completedAt: pickList.completedAt?.toISOString() ?? null,
+      createdAt: pickList.createdAt.toISOString(),
+      items: pickList.items.map((item: any) => ({
+        id: item.id,
+        pickListId: item.pickListId,
+        salesOrderId: item.salesOrderId,
+        productId: item.productId,
+        quantity: item.quantity,
+        pickedQty: item.pickedQty,
+        binLocation: item.binLocation,
+        notes: item.notes,
+      })),
+      progress: { total, picked, percentComplete },
+    };
+  }
+
+  async updatePickListItem(
+    pickListId: string,
+    itemId: string,
+    pickedQty: number,
+    context: AuthContext,
+  ) {
+    const prisma = getPrisma();
+
+    const pickList = await prisma.pickList.findFirst({
+      where: {
+        id: pickListId,
+        organizationId: context.organization.id,
+      },
+      include: { items: true },
+    });
+
+    if (!pickList) {
+      throw new NotFoundException("Pick list not found.");
+    }
+
+    const item = pickList.items.find((i: any) => i.id === itemId);
+    if (!item) {
+      throw new NotFoundException("Pick list item not found.");
+    }
+
+    if (pickedQty < 0 || pickedQty > item.quantity) {
+      throw new BadRequestException(
+        `pickedQty must be between 0 and ${item.quantity}.`,
+      );
+    }
+
+    await prisma.pickListItem.update({
+      where: { id: itemId },
+      data: { pickedQty },
+    });
+
+    // Recalculate progress after update
+    const allItems = pickList.items.map((i: any) =>
+      i.id === itemId ? { ...i, pickedQty } : i,
+    );
+    const total = allItems.reduce((sum: any, i: any) => sum + i.quantity, 0);
+    const picked = allItems.reduce((sum: any, i: any) => sum + i.pickedQty, 0);
+    const percentComplete = total === 0 ? 0 : Math.round((picked / total) * 100);
+
+    // Auto-update pick list status
+    if (pickList.status === "PENDING" && pickedQty > 0) {
+      await prisma.pickList.update({
+        where: { id: pickListId },
+        data: { status: "IN_PROGRESS", startedAt: new Date() },
+      });
+    }
+
+    return {
+      itemId,
+      pickedQty,
+      progress: { total, picked, percentComplete },
+    };
+  }
+
+  async packOrder(orderId: string, context: AuthContext) {
+    const prisma = getPrisma();
+
+    return await prisma.$transaction(async (tx: any) => {
+      const order = await tx.salesOrder.findFirst({
+        where: {
+          id: orderId,
+          organizationId: context.organization.id,
+          status: "PICKING",
+        },
+      });
+
+      if (!order) {
+        throw new NotFoundException(
+          "Sales order not found or not in PICKING status.",
+        );
+      }
+
+      // Validate all items are fully picked
+      const pickLists = await tx.pickList.findMany({
+        where: { organizationId: context.organization.id },
+        include: {
+          items: { where: { salesOrderId: orderId } },
+        },
+      });
+
+      const allItems = pickLists.flatMap((pl: any) => pl.items);
+      const unpicked = allItems.filter((item: any) => item.pickedQty < item.quantity);
+
+      if (unpicked.length > 0) {
+        throw new BadRequestException(
+          `${unpicked.length} item(s) not fully picked. Complete picking before packing.`,
+        );
+      }
+
+      await tx.salesOrder.update({
+        where: { id: order.id },
+        data: { status: "PACKED" },
+      });
+
+      // Complete related pick lists
+      await tx.pickList.updateMany({
+        where: {
+          organizationId: context.organization.id,
+          items: { some: { salesOrderId: orderId } },
+          status: { not: "CANCELLED" },
+        },
+        data: { status: "COMPLETED", completedAt: new Date() },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: context.organization.id,
+          actorId: context.user.id,
+          action: "PACK",
+          entityType: "SalesOrder",
+          entityId: order.id,
+          summary: `${order.code} → PACKED`,
+        },
+      });
+
+      return { orderId: order.id, status: "PACKED" as const };
+    });
+  }
+
+  async shipOrder(
+    orderId: string,
+    body: { carrier?: string; trackingNumber?: string; weight?: number; packageCount?: number },
+    context: AuthContext,
+  ) {
+    const prisma = getPrisma();
+
+    return await prisma.$transaction(async (tx: any) => {
+      const order = await tx.salesOrder.findFirst({
+        where: {
+          id: orderId,
+          organizationId: context.organization.id,
+          status: "PACKED",
+        },
+      });
+
+      if (!order) {
+        throw new NotFoundException(
+          "Sales order not found or not in PACKED status.",
+        );
+      }
+
+      // Generate shipment code
+      const existingShipments = await tx.shipment.findMany({
+        where: { organizationId: context.organization.id },
+        select: { code: true },
+      });
+      const existingCodes = existingShipments.map((s: any) => s.code);
+
+      const usedNumbers = new Set(
+        existingCodes
+          .map((code: any) => {
+            const match = code.match(/^SHP-(\d+)$/);
+            return match ? parseInt(match[1], 10) : NaN;
+          })
+          .filter((n: any) => !Number.isNaN(n)),
+      );
+      let next = 1;
+      while (usedNumbers.has(next)) next++;
+      const shipmentCode = `SHP-${String(next).padStart(4, "0")}`;
+
+      // Build tracking URL
+      let trackingUrl: string | null = null;
+      if (body.carrier && body.trackingNumber) {
+        const carrierUrls: Record<string, string> = {
+          yurtici: "https://www.yurticikargo.com/tr/online-islemler/gonderi-sorgula?code={tracking}",
+          aras: "https://kargotakip.araskargo.com.tr/..?barcode={tracking}",
+          mng: "https://www.mngkargo.com.tr/..?id={tracking}",
+          ptt: "https://gonderitakip.ptt.gov.tr/Track/Verify?q={tracking}",
+        };
+        const template = carrierUrls[body.carrier.toLowerCase()];
+        if (template) {
+          trackingUrl = template.replace(
+            "{tracking}",
+            encodeURIComponent(body.trackingNumber),
+          );
+        }
+      }
+
+      await tx.salesOrder.update({
+        where: { id: order.id },
+        data: { status: "SHIPPED" },
+      });
+
+      const shipment = await tx.shipment.create({
+        data: {
+          organizationId: context.organization.id,
+          salesOrderId: order.id,
+          code: shipmentCode,
+          carrier: body.carrier || null,
+          trackingNumber: body.trackingNumber || null,
+          trackingUrl,
+          weight: body.weight ?? null,
+          packageCount: body.packageCount ?? 1,
+          status: "IN_TRANSIT",
+          shippedAt: new Date(),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: context.organization.id,
+          actorId: context.user.id,
+          action: "SHIP",
+          entityType: "SalesOrder",
+          entityId: order.id,
+          summary: `${order.code} → SHIPPED, Shipment ${shipment.code}`,
+        },
+      });
+
+      return {
+        orderId: order.id,
+        status: "SHIPPED" as const,
+        shipment: {
+          id: shipment.id,
+          code: shipment.code,
+          carrier: shipment.carrier,
+          trackingNumber: shipment.trackingNumber,
+          trackingUrl: shipment.trackingUrl,
+          weight: shipment.weight ? Number(shipment.weight) : null,
+          packageCount: shipment.packageCount,
+          status: shipment.status,
+          shippedAt: shipment.shippedAt?.toISOString() ?? null,
+        },
+      };
+    });
+  }
+
+  async deliverOrder(orderId: string, context: AuthContext) {
+    const prisma = getPrisma();
+
+    return await prisma.$transaction(async (tx: any) => {
+      const order = await tx.salesOrder.findFirst({
+        where: {
+          id: orderId,
+          organizationId: context.organization.id,
+          status: "SHIPPED",
+        },
+      });
+
+      if (!order) {
+        throw new NotFoundException(
+          "Sales order not found or not in SHIPPED status.",
+        );
+      }
+
+      await tx.salesOrder.update({
+        where: { id: order.id },
+        data: { status: "DELIVERED" },
+      });
+
+      // Mark shipments as delivered
+      await tx.shipment.updateMany({
+        where: {
+          salesOrderId: order.id,
+          organizationId: context.organization.id,
+          status: "IN_TRANSIT",
+        },
+        data: { status: "DELIVERED", deliveredAt: new Date() },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: context.organization.id,
+          actorId: context.user.id,
+          action: "CONFIRM",
+          entityType: "SalesOrder",
+          entityId: order.id,
+          summary: `${order.code} → DELIVERED`,
+        },
+      });
+
+      return { orderId: order.id, status: "DELIVERED" as const };
+    });
   }
 
   private async listDatabaseProducts(context: AuthContext): Promise<Product[]> {
@@ -1971,7 +2414,7 @@ export class StockOpsApiService {
 
   private async audit(
     context: AuthContext,
-    action: "CREATE" | "UPDATE" | "CONFIRM" | "RECEIVE",
+    action: "CREATE" | "UPDATE" | "CONFIRM" | "RECEIVE" | "CANCEL" | "PICK" | "PACK" | "SHIP",
     entityType: string,
     entityId: string,
     summary: string,

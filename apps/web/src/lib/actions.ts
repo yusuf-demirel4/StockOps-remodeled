@@ -463,6 +463,77 @@ export async function deleteUserAction(
   formData: FormData,
 ) {
   return runMutation("Kullanıcı çıkarıldı.", (context) =>
-    deleteUser(value(formData, "membershipId"), context),
+    import("@/lib/repository").then((m) =>
+      m.deleteUser(value(formData, "membershipId"), context)
+    )
+  );
+}
+
+export async function startPickingAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Toplama işlemi başlatıldı.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.startPicking(value(formData, "orderId"), context)
+    )
+  );
+}
+
+export async function updatePickListItemAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Miktar güncellendi.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.updatePickListItem(
+        value(formData, "pickListId"),
+        value(formData, "itemId"),
+        parseInt(value(formData, "pickedQty") || "0", 10),
+        context
+      )
+    )
+  );
+}
+
+export async function markPackedAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Sipariş paketlendi.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.packOrder(value(formData, "orderId"), context)
+    )
+  );
+}
+
+export async function shipOrderAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Sipariş kargoya verildi.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.shipOrder(
+        value(formData, "orderId"),
+        {
+          carrier: value(formData, "carrier") || undefined,
+          trackingNumber: value(formData, "trackingNumber") || undefined,
+          weight: parseFloat(value(formData, "weight") || "0") || undefined,
+          packageCount: parseInt(value(formData, "packageCount") || "1", 10),
+        },
+        context
+      )
+    )
+  );
+}
+
+export async function deliverOrderAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Sipariş teslim edildi.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.deliverOrder(value(formData, "orderId"), context)
+    )
   );
 }

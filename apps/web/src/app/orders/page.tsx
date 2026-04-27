@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import {
   ConfirmSalesOrderForm,
@@ -153,7 +154,11 @@ export default async function OrdersPage() {
                     className="border-b border-[#eef0ea] align-top last:border-0"
                     key={order.id}
                   >
-                    <td className="py-3 pr-3 font-mono text-xs">{order.code}</td>
+                    <td className="py-3 pr-3 font-mono text-xs">
+                      <Link href={`/orders/${order.id}`} className="text-[#236d5a] hover:underline">
+                        {order.code}
+                      </Link>
+                    </td>
                     <td className="py-3 pr-3 font-medium">
                       {order.customerName}
                     </td>

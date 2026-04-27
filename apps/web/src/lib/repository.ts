@@ -1564,7 +1564,7 @@ function nextCode(prefix: string, count: number) {
 
 async function audit(
   context: AuthContext,
-  action: "CREATE" | "UPDATE" | "CONFIRM" | "RECEIVE",
+  action: "CREATE" | "UPDATE" | "CONFIRM" | "RECEIVE" | "CANCEL" | "PICK" | "PACK" | "SHIP",
   entityType: string,
   entityId: string,
   summary: string,
@@ -1578,5 +1578,292 @@ async function audit(
       entityId,
       summary,
     },
+  });
+}
+
+export async function getSalesOrderDetails(orderId: string, context: AuthContext) {
+  if (!dbMode()) {
+    const { getDemoSnapshot } = await import("@/lib/demo-store");
+    const snapshot = getDemoSnapshot(context);
+    const order = snapshot.salesOrders.find(o => o.id === orderId);
+    if (!order) throw new Error("Sipariş bulunamadı.");
+    const mockOrder = {
+      ...order,
+      lines: order.lines.map(l => ({ ...l, id: l.productId, product: snapshot.products.find(p => p.id === l.productId)! })),
+      pickListItems: [],
+      shipments: []
+    } as any;
+    return { order: mockOrder, pickLists: [] };
+  }
+  const prisma = getPrisma();
+  const order = await prisma.salesOrder.findFirst({
+    where: { id: orderId, organizationId: context.organization.id },
+    include: {
+      lines: { include: { product: true } },
+      pickListItems: { include: { product: true } },
+      shipments: true,
+    },
+  });
+  if (!order) {
+    throw new Error("Sipariş bulunamadı.");
+  }
+  const pickLists = await prisma.pickList.findMany({
+    where: { organizationId: context.organization.id, id: { in: order.pickListItems.map(i => i.pickListId) } },
+    include: { items: { include: { product: true } } },
+  });
+  return { order, pickLists };
+}
+
+export async function startPicking(orderId: string, context: AuthContext) {
+  if (!dbMode()) return;
+  ensurePermission(context, "manage_stock");
+  const prisma = getPrisma();
+
+  await prisma.$transaction(async (tx) => {
+    const order = await tx.salesOrder.findFirst({
+      where: { id: orderId, organizationId: context.organization.id, status: "CONFIRMED" },
+      include: { lines: true },
+    });
+    const warehouse = await tx.warehouse.findFirst({
+      where: { organizationId: context.organization.id, isDefault: true },
+    });
+
+    if (!order || !warehouse) {
+      throw new Error("Sipariş veya depo bulunamadı (Siparişin durumu ONAYLANDI olmalıdır).");
+    }
+
+    const count = await tx.pickList.count({
+      where: { organizationId: context.organization.id },
+    });
+    const pickListId = nextCode("PL", count);
+
+    await tx.salesOrder.update({
+      where: { id: order.id },
+      data: { status: "PICKING" },
+    });
+
+    const pickList = await tx.pickList.create({
+      data: {
+        organizationId: context.organization.id,
+        warehouseId: warehouse.id,
+        status: "PENDING",
+        priority: 1,
+        items: {
+          create: order.lines.map((line) => ({
+            salesOrderId: order.id,
+            productId: line.productId,
+            quantity: line.quantity,
+            pickedQty: 0,
+          })),
+        },
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action: "PICK",
+        entityType: "SalesOrder",
+        entityId: order.id,
+        summary: `${order.code} için toplama başlatıldı`,
+      },
+    });
+  });
+}
+
+export async function updatePickListItem(
+  pickListId: string,
+  itemId: string,
+  pickedQty: number,
+  context: AuthContext,
+) {
+  if (!dbMode()) return;
+  ensurePermission(context, "manage_stock");
+  const prisma = getPrisma();
+
+  await prisma.$transaction(async (tx) => {
+    const pickList = await tx.pickList.findFirst({
+      where: { id: pickListId, organizationId: context.organization.id },
+    });
+    const item = await tx.pickListItem.findFirst({
+      where: { id: itemId, pickListId },
+    });
+
+    if (!pickList || !item) {
+      throw new Error("Toplama listesi veya kalemi bulunamadı.");
+    }
+    if (pickedQty < 0 || pickedQty > item.quantity) {
+      throw new Error("Geçersiz miktar.");
+    }
+
+    if (pickList.status === "PENDING") {
+      await tx.pickList.update({
+        where: { id: pickListId },
+        data: { status: "IN_PROGRESS", startedAt: new Date() },
+      });
+    }
+
+    await tx.pickListItem.update({
+      where: { id: itemId },
+      data: { pickedQty },
+    });
+  });
+}
+
+export async function packOrder(orderId: string, context: AuthContext) {
+  if (!dbMode()) return;
+  ensurePermission(context, "manage_stock");
+  const prisma = getPrisma();
+
+  await prisma.$transaction(async (tx) => {
+    const order = await tx.salesOrder.findFirst({
+      where: { id: orderId, organizationId: context.organization.id, status: "PICKING" },
+      include: { pickListItems: true },
+    });
+
+    if (!order) {
+      throw new Error("Sipariş bulunamadı veya durumu uygun değil.");
+    }
+
+    const allPicked = order.pickListItems.every(item => item.pickedQty >= item.quantity);
+    if (!allPicked) {
+      throw new Error("Tüm ürünler tam olarak toplanmadan paketleme yapılamaz.");
+    }
+
+    await tx.salesOrder.update({
+      where: { id: order.id },
+      data: { status: "PACKED" },
+    });
+
+    const pickListIds = [...new Set(order.pickListItems.map(i => i.pickListId))];
+    for (const plId of pickListIds) {
+      await tx.pickList.update({
+        where: { id: plId },
+        data: { status: "COMPLETED", completedAt: new Date() },
+      });
+    }
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action: "PACK",
+        entityType: "SalesOrder",
+        entityId: order.id,
+        summary: `${order.code} paketlendi`,
+      },
+    });
+  });
+}
+
+export async function shipOrder(
+  orderId: string,
+  input: { carrier?: string; trackingNumber?: string; weight?: number; packageCount?: number },
+  context: AuthContext,
+) {
+  if (!dbMode()) return;
+  ensurePermission(context, "manage_stock");
+  const prisma = getPrisma();
+
+  await prisma.$transaction(async (tx) => {
+    const order = await tx.salesOrder.findFirst({
+      where: { id: orderId, organizationId: context.organization.id, status: "PACKED" },
+    });
+
+    if (!order) {
+      throw new Error("Sipariş bulunamadı veya durumu uygun değil.");
+    }
+
+    const count = await tx.shipment.count({
+      where: { organizationId: context.organization.id },
+    });
+    const shipmentCode = nextCode("SHP", count);
+
+    let trackingUrl = null;
+    if (input.trackingNumber) {
+      const carrier = input.carrier?.toLowerCase() || "";
+      if (carrier === "yurtiçi" || carrier === "yurtici") {
+        trackingUrl = `https://www.yurticikargo.com/tr/online-islemler/gonderi-sorgula?code=${input.trackingNumber}`;
+      } else if (carrier === "aras") {
+        trackingUrl = `https://kargotakip.araskargo.com.tr/mainpage?barcode=${input.trackingNumber}`;
+      } else if (carrier === "mng") {
+        trackingUrl = `https://www.mngkargo.com.tr/gonderitakip/${input.trackingNumber}`;
+      } else if (carrier === "ptt") {
+        trackingUrl = `https://gonderitakip.ptt.gov.tr/Track/Verify?q=${input.trackingNumber}`;
+      }
+    }
+
+    await tx.salesOrder.update({
+      where: { id: order.id },
+      data: { status: "SHIPPED" },
+    });
+
+    await tx.shipment.create({
+      data: {
+        organizationId: context.organization.id,
+        salesOrderId: order.id,
+        code: shipmentCode,
+        carrier: input.carrier || null,
+        trackingNumber: input.trackingNumber || null,
+        trackingUrl,
+        weight: input.weight || null,
+        packageCount: input.packageCount || 1,
+        status: "IN_TRANSIT",
+        shippedAt: new Date(),
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action: "SHIP",
+        entityType: "SalesOrder",
+        entityId: order.id,
+        summary: `${order.code} kargoya verildi (${shipmentCode})`,
+      },
+    });
+  });
+}
+
+export async function deliverOrder(orderId: string, context: AuthContext) {
+  if (!dbMode()) return;
+  ensurePermission(context, "manage_stock");
+  const prisma = getPrisma();
+
+  await prisma.$transaction(async (tx) => {
+    const order = await tx.salesOrder.findFirst({
+      where: { id: orderId, organizationId: context.organization.id, status: "SHIPPED" },
+      include: { shipments: true },
+    });
+
+    if (!order) {
+      throw new Error("Sipariş bulunamadı veya durumu uygun değil.");
+    }
+
+    await tx.salesOrder.update({
+      where: { id: order.id },
+      data: { status: "DELIVERED" },
+    });
+
+    const activeShipment = order.shipments.find(s => s.status !== "DELIVERED" && s.status !== "RETURNED");
+    if (activeShipment) {
+      await tx.shipment.update({
+        where: { id: activeShipment.id },
+        data: { status: "DELIVERED", deliveredAt: new Date() },
+      });
+    }
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action: "UPDATE",
+        entityType: "SalesOrder",
+        entityId: order.id,
+        summary: `${order.code} teslim edildi`,
+      },
+    });
   });
 }

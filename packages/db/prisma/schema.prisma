@@ -27,6 +27,10 @@ enum StockMovementType {
 enum SalesOrderStatus {
   DRAFT
   CONFIRMED
+  PICKING
+  PACKED
+  SHIPPED
+  DELIVERED
   CANCELLED
 }
 
@@ -68,6 +72,9 @@ enum AuditAction {
   CONFIRM
   RECEIVE
   CANCEL
+  PICK
+  PACK
+  SHIP
 }
 
 enum WebhookSource {
@@ -86,6 +93,20 @@ enum WebhookEventStatus {
 enum NotificationChannel {
   SMS
   WHATSAPP
+}
+
+enum ShipmentStatus {
+  PREPARING
+  IN_TRANSIT
+  DELIVERED
+  RETURNED
+}
+
+enum PickListStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
 }
 
 enum NotificationDeliveryStatus {
@@ -115,26 +136,24 @@ model Organization {
   sessions               Session[]
   stockMovements         StockMovement[]
   suppliers              Supplier[]
+  shipments              Shipment[]
+  pickLists              PickList[]
   webhookEvents          WebhookEvent[]
   warehouses             Warehouse[]
-  accountingConnections  AccountingConnection[]
 }
 
 model User {
-  id              String          @id @default(cuid())
-  name            String
-  email           String          @unique
-  passwordHash    String?
-  twoFactorEnabled Boolean        @default(false)
-  createdAt       DateTime        @default(now())
-  apiTokens       ApiToken[]
-  auditLogs       AuditLog[]
-  backupCodes     BackupCode[]
-  memberships     Membership[]
-  oauthAccounts   OAuthAccount[]
-  sessions        Session[]
-  stockMovements  StockMovement[]
-  totpSecret      TotpSecret?
+  id             String          @id @default(cuid())
+  name           String
+  email          String          @unique
+  passwordHash   String?
+  createdAt      DateTime        @default(now())
+  apiTokens      ApiToken[]
+  auditLogs      AuditLog[]
+  memberships    Membership[]
+  pickLists      PickList[]
+  sessions       Session[]
+  stockMovements StockMovement[]
 }
 
 model ApiToken {
@@ -159,9 +178,6 @@ model Session {
   userId         String
   organizationId String
   tokenHash      String       @unique
-  userAgent      String?
-  ipAddress      String?
-  lastActiveAt   DateTime     @default(now())
   expiresAt      DateTime
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -193,6 +209,7 @@ model Warehouse {
   isDefault      Boolean         @default(false)
   createdAt      DateTime        @default(now())
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pickLists      PickList[]
   stockMovements StockMovement[]
 
   @@unique([organizationId, code])
@@ -221,6 +238,7 @@ model Product {
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   invoiceLines       InvoiceLine[]
   purchaseOrderLines PurchaseOrderLine[]
+  pickListItems      PickListItem[]
   returnLines        SalesReturnLine[]
   salesOrderLines    SalesOrderLine[]
   stockMovements     StockMovement[]
@@ -308,7 +326,9 @@ model SalesOrder {
   customer       Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
   lines          SalesOrderLine[]
   organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pickListItems  PickListItem[]
   returns        SalesReturn[]
+  shipments      Shipment[]
 
   @@unique([organizationId, code])
   @@index([organizationId, status])
@@ -515,94 +535,62 @@ model Payment {
   @@index([invoiceId])
 }
 
-// ── 2FA ──
-
-model TotpSecret {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  encryptedSecret String
-  verified        Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model BackupCode {
-  id       String    @id @default(cuid())
-  userId   String
-  codeHash String
-  usedAt   DateTime?
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-// ── OAuth / SSO ──
-
-model OAuthAccount {
-  id             String    @id @default(cuid())
-  userId         String
-  provider       String
-  providerUserId String
-  accessToken    String?
-  refreshToken   String?
-  expiresAt      DateTime?
-  createdAt      DateTime  @default(now())
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerUserId])
-  @@index([userId])
-}
-
-// ── Accounting Integrations ──
-
-enum AccountingProvider {
-  XERO
-  QUICKBOOKS
-}
-
-enum SyncDirection {
-  PUSH
-  PULL
-}
-
-enum SyncStatus {
-  SUCCESS
-  FAILED
-  CONFLICT
-}
-
-model AccountingConnection {
-  id             String             @id @default(cuid())
+model Shipment {
+  id             String         @id @default(cuid())
   organizationId String
-  provider       AccountingProvider
-  tenantId       String
-  accessToken    String
-  refreshToken   String
-  tokenExpiresAt DateTime
-  lastSyncAt     DateTime?
-  isActive       Boolean            @default(true)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  syncLogs       AccountingSyncLog[]
+  salesOrderId   String
+  code           String
+  carrier        String?
+  trackingNumber String?
+  trackingUrl    String?
+  weight         Decimal?       @db.Decimal(8, 3)
+  packageCount   Int            @default(1)
+  status         ShipmentStatus @default(PREPARING)
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime       @default(now())
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesOrder     SalesOrder     @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
 
-  @@unique([organizationId, provider])
-  @@index([organizationId])
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([salesOrderId])
 }
 
-model AccountingSyncLog {
-  id           String               @id @default(cuid())
-  connectionId String
-  direction    SyncDirection
-  entityType   String
-  entityId     String
-  externalId   String?
-  status       SyncStatus
-  error        String?
-  resolvedAt   DateTime?
-  createdAt    DateTime             @default(now())
-  connection   AccountingConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+model PickList {
+  id             String         @id @default(cuid())
+  organizationId String
+  warehouseId    String
+  assignedToId   String?
+  status         PickListStatus @default(PENDING)
+  priority       Int            @default(0)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  assignedTo     User?          @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  items          PickListItem[]
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  warehouse      Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
 
-  @@index([connectionId, createdAt])
-  @@index([entityType, entityId])
+  @@index([organizationId, status])
+  @@index([warehouseId])
+  @@index([assignedToId])
+}
+
+model PickListItem {
+  id           String     @id @default(cuid())
+  pickListId   String
+  salesOrderId String
+  productId    String
+  quantity     Int
+  pickedQty    Int        @default(0)
+  binLocation  String?
+  notes        String?
+  pickList     PickList   @relation(fields: [pickListId], references: [id], onDelete: Cascade)
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+
+  @@index([pickListId])
+  @@index([salesOrderId])
+  @@index([productId])
 }

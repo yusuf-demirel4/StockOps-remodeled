@@ -29,7 +29,18 @@ export type PaymentMethod =
   | "CHECK"
   | "OTHER";
 
-export type SalesOrderStatus = "DRAFT" | "CONFIRMED" | "CANCELLED";
+export type SalesOrderStatus =
+  | "DRAFT"
+  | "CONFIRMED"
+  | "PICKING"
+  | "PACKED"
+  | "SHIPPED"
+  | "DELIVERED"
+  | "CANCELLED";
+
+export type ShipmentStatus = "PREPARING" | "IN_TRANSIT" | "DELIVERED" | "RETURNED";
+
+export type PickListStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type PurchaseOrderStatus =
   | "DRAFT"
   | "SENT"
@@ -253,15 +264,79 @@ export type SalesReturnLine = {
   restocked: boolean;
 };
 
+export type AuditAction =
+  | "CREATE"
+  | "UPDATE"
+  | "CONFIRM"
+  | "RECEIVE"
+  | "CANCEL"
+  | "PICK"
+  | "PACK"
+  | "SHIP";
+
 export type AuditLog = {
   id: string;
   organizationId: string;
   actorId?: string;
-  action: string;
+  action: AuditAction;
   entityType: string;
   entityId: string;
   summary: string;
   createdAt: string;
+};
+
+export type Shipment = {
+  id: string;
+  organizationId: string;
+  salesOrderId: string;
+  code: string;
+  carrier?: string;
+  trackingNumber?: string;
+  trackingUrl?: string;
+  weight?: number;
+  packageCount: number;
+  status: ShipmentStatus;
+  shippedAt?: string;
+  deliveredAt?: string;
+  createdAt: string;
+};
+
+export type PickListItem = {
+  id: string;
+  pickListId: string;
+  salesOrderId: string;
+  productId: string;
+  quantity: number;
+  pickedQty: number;
+  binLocation?: string;
+  notes?: string;
+};
+
+export type PickList = {
+  id: string;
+  organizationId: string;
+  warehouseId: string;
+  assignedToId?: string;
+  status: PickListStatus;
+  priority: number;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+  items: PickListItem[];
+};
+
+export type PickListDraft = {
+  salesOrderId: string;
+  warehouseId: string;
+  status: PickListStatus;
+  priority: number;
+  items: Array<{
+    salesOrderId: string;
+    productId: string;
+    quantity: number;
+    pickedQty: number;
+    binLocation?: string;
+  }>;
 };
 
 export type Session = {

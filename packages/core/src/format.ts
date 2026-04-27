@@ -58,6 +58,10 @@ export function salesStatusLabel(status: SalesOrderStatus) {
   const labels: Record<SalesOrderStatus, string> = {
     DRAFT: "Taslak",
     CONFIRMED: "Onaylandı",
+    PICKING: "Toplanıyor",
+    PACKED: "Paketlendi",
+    SHIPPED: "Kargoda",
+    DELIVERED: "Teslim Edildi",
     CANCELLED: "İptal",
   };
 

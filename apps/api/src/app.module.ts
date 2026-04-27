@@ -6,19 +6,14 @@ import { ApiAuthGuard } from "./auth/api-auth.guard";
 import { ApiAuthService } from "./auth/api-auth.service";
 import { AuthController } from "./auth/auth.controller";
 import { PermissionsGuard } from "./auth/permissions.guard";
-import { SessionsController } from "./auth/sessions.controller";
-import { OAuthController } from "./auth/oauth/oauth.controller";
-import { TwoFactorController } from "./auth/two-factor.controller";
 import { StockOpsApiService } from "./domain/stockops-api.service";
 import { CustomersController } from "./customers/customers.controller";
 import { ExportsController } from "./exports/exports.controller";
 import { HealthController } from "./health/health.controller";
-import { StatusController } from "./health/status.controller";
-import { AccountingController } from "./integrations/accounting.controller";
-import { MetricsController } from "./metrics/metrics.controller";
 import { InventoryController } from "./inventory/inventory.controller";
 import { InvoicesController } from "./invoices/invoices.controller";
 import { PurchaseOrdersController } from "./orders/purchase-orders.controller";
+import { PickPackController } from "./orders/pick-pack.controller";
 import { SalesOrdersController } from "./orders/sales-orders.controller";
 import { SalesReturnsController } from "./orders/sales-returns.controller";
 import { ProductsController } from "./products/products.controller";
@@ -39,17 +34,12 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
   ],
   controllers: [
     AuthController,
-    OAuthController,
-    SessionsController,
-    TwoFactorController,
     CustomersController,
     ExportsController,
     HealthController,
-    StatusController,
-    AccountingController,
-    MetricsController,
     InventoryController,
     InvoicesController,
+    PickPackController,
     ProductsController,
     PurchaseOrdersController,
     SalesOrdersController,
