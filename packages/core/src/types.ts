@@ -77,6 +77,15 @@ export type Membership = {
   role: Role;
 };
 
+export type Member = {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  role: Role;
+  createdAt: string;
+};
+
 export type Warehouse = {
   id: string;
   organizationId: string;
@@ -102,6 +111,19 @@ export type Product = {
   dimensionH?: number;
   minimumStock: number;
   isActive: boolean;
+};
+
+export type ProductVariant = {
+  id: string;
+  productId: string;
+  sku: string;
+  name: string;
+  barcode?: string;
+  unitPrice: number;
+  costPrice?: number;
+  weight?: number;
+  isActive: boolean;
+  attributes: Record<string, string>;
 };
 
 export type Supplier = {
@@ -212,6 +234,25 @@ export type PurchaseOrder = {
   createdAt: string;
 };
 
+export type SalesReturnStatus = "DRAFT" | "APPROVED" | "COMPLETED" | "CANCELLED";
+
+export type SalesReturn = {
+  id: string;
+  organizationId: string;
+  salesOrderId: string;
+  code: string;
+  reason?: string;
+  status: SalesReturnStatus;
+  lines: SalesReturnLine[];
+  createdAt: string;
+};
+
+export type SalesReturnLine = {
+  productId: string;
+  quantity: number;
+  restocked: boolean;
+};
+
 export type AuditLog = {
   id: string;
   organizationId: string;
@@ -306,6 +347,7 @@ export type AppSnapshot = {
   warehouses: Warehouse[];
   products: Product[];
   suppliers: Supplier[];
+  members: Member[];
   stockMovements: StockMovement[];
   salesOrders: SalesOrder[];
   purchaseOrders: PurchaseOrder[];

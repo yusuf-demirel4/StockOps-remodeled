@@ -1,25 +1,28 @@
 {
-  "name": "@stockops/worker",
+  "name": "@stockops/integration-shopify",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./mapper": "./src/mapper.ts",
+    "./webhook-handler": "./src/webhook-handler.ts",
+    "./inventory-sync": "./src/inventory-sync.ts",
+    "./reconciliation": "./src/reconciliation.ts",
+    "./types": "./src/types.ts"
+  },
   "scripts": {
-    "dev": "tsx watch src/main.ts",
-    "start": "tsx src/main.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@stockops/core": "*",
-    "@stockops/db": "*",
-    "@stockops/integration-shopify": "*",
-    "@stockops/integration-woocommerce": "*",
     "@stockops/queue": "*"
   },
   "devDependencies": {
     "@types/node": "^20",
-    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.1.5"
   }

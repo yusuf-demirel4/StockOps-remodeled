@@ -5,18 +5,26 @@ import { redirect } from "next/navigation";
 import type { ActionState } from "@/lib/action-state";
 import { requireAuth, signInWithPassword, signOut } from "@/lib/auth";
 import {
+  approveSalesReturn,
   confirmSalesOrder,
   createProduct,
   createPurchaseOrder,
   createSalesOrder,
+  createSalesReturn,
   createStockMovement,
   createStockTransfer,
   createSupplier,
+  createUser,
+  createVariant,
   createWarehouse,
+  deleteUser,
+  deleteVariant,
   receivePurchaseOrder,
   setProductActive,
   updateProduct,
   updateSupplier,
+  updateUserRole,
+  updateVariant,
   updateWarehouse,
 } from "@/lib/repository";
 import { signInInputSchema } from "@stockops/core/schemas";
@@ -34,6 +42,7 @@ function refresh() {
   revalidatePath("/inventory");
   revalidatePath("/orders");
   revalidatePath("/suppliers");
+  revalidatePath("/users");
   revalidatePath("/settings");
 }
 
@@ -330,5 +339,128 @@ export async function receivePurchaseOrderAction(
 ) {
   return runMutation("Satın alma teslim alındı.", (context) =>
     receivePurchaseOrder(value(formData, "orderId"), context),
+  );
+}
+
+export async function createVariantAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Varyant eklendi.", (context) =>
+    createVariant(
+      {
+        productId: value(formData, "productId"),
+        sku: value(formData, "sku"),
+        name: value(formData, "name"),
+        barcode: value(formData, "barcode"),
+        unitPrice: value(formData, "unitPrice"),
+        costPrice: value(formData, "costPrice"),
+        weight: value(formData, "weight"),
+        attributes: value(formData, "attributes"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function updateVariantAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Varyant güncellendi.", (context) =>
+    updateVariant(
+      value(formData, "variantId"),
+      {
+        sku: value(formData, "sku"),
+        name: value(formData, "name"),
+        barcode: value(formData, "barcode"),
+        unitPrice: value(formData, "unitPrice"),
+        costPrice: value(formData, "costPrice"),
+        weight: value(formData, "weight"),
+        attributes: value(formData, "attributes"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function deleteVariantAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Varyant silindi.", (context) =>
+    deleteVariant(value(formData, "variantId"), context),
+  );
+}
+
+export async function createSalesReturnAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  const productIds = formData.getAll("productId") as string[];
+  const quantities = formData.getAll("quantity") as string[];
+
+  const lines = productIds.map((productId, i) => ({
+    productId,
+    quantity: quantities[i],
+  }));
+
+  return runMutation("İade talebi oluşturuldu.", (context) =>
+    createSalesReturn(
+      {
+        salesOrderId: value(formData, "salesOrderId"),
+        reason: value(formData, "reason"),
+        lines,
+      },
+      context,
+    ),
+  );
+}
+
+export async function approveSalesReturnAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("İade onaylandı, stok iade edildi.", (context) =>
+    approveSalesReturn(value(formData, "returnId"), context),
+  );
+}
+
+export async function createUserAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Kullanıcı eklendi.", (context) =>
+    createUser(
+      {
+        name: value(formData, "name"),
+        email: value(formData, "email"),
+        password: value(formData, "password"),
+        role: value(formData, "role"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function updateUserRoleAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Kullanıcı rolü güncellendi.", (context) =>
+    updateUserRole(
+      value(formData, "membershipId"),
+      { role: value(formData, "role") },
+      context,
+    ),
+  );
+}
+
+export async function deleteUserAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Kullanıcı çıkarıldı.", (context) =>
+    deleteUser(value(formData, "membershipId"), context),
   );
 }

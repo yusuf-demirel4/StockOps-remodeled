@@ -3,6 +3,7 @@ import {
   handleLowStockNotificationDispatch,
   handleOrderStatusNotificationDispatch,
 } from "./notification-dispatcher";
+import { handleStockSyncDispatch } from "./sync-dispatcher";
 import { handleWebhookReceived } from "./webhook-processor";
 
 export function createJob<TName extends JobName>(
@@ -37,7 +38,9 @@ export async function handleJob(job: QueueJob) {
         job as QueueJob<"notifications.order-status.dispatch">,
       );
     case "integrations.stock-sync.dispatch":
-      return { status: "stock-sync-dispatch-ready", jobId: job.id };
+      return handleStockSyncDispatch(
+        job as QueueJob<"integrations.stock-sync.dispatch">,
+      );
     default: {
       const exhaustive: never = job.name;
       return exhaustive;

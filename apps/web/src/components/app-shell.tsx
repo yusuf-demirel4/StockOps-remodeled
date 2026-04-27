@@ -7,6 +7,7 @@ import {
   LogOut,
   Package,
   Settings,
+  Shield,
   Truck,
   Users,
 } from "lucide-react";
@@ -22,6 +23,7 @@ const navigation = [
   { href: "/orders", label: "Siparişler", icon: ClipboardList },
   { href: "/invoices", label: "Faturalar", icon: FileText },
   { href: "/suppliers", label: "Tedarikçiler", icon: Truck },
+  { href: "/users", label: "Kullanıcılar", icon: Shield },
   { href: "/settings", label: "Ayarlar", icon: Settings },
 ];
 

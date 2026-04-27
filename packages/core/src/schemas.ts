@@ -144,6 +144,63 @@ export const notificationDeliveryStatusSchema = z.enum([
   "SKIPPED",
 ]);
 
+export const variantInputSchema = z.object({
+  productId: z.string().min(1),
+  sku: z.string().trim().min(2),
+  name: z.string().trim().min(2),
+  barcode: z.string().trim().optional(),
+  unitPrice: z.coerce.number().min(0).default(0),
+  costPrice: z.coerce.number().min(0).optional(),
+  weight: z.coerce.number().min(0).optional(),
+  attributes: z.string().trim().optional(),
+});
+
+export const variantUpdateInputSchema = variantInputSchema
+  .omit({ productId: true })
+  .partial()
+  .refine(
+    (value) => Object.keys(value).length > 0,
+    "At least one field is required.",
+  );
+
+export const salesReturnInputSchema = z.object({
+  salesOrderId: z.string().min(1),
+  reason: z.string().trim().optional(),
+  lines: z
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        quantity: z.coerce.number().int().positive(),
+      }),
+    )
+    .min(1),
+});
+
+export const userInputSchema = z.object({
+  name: z.string().trim().min(2),
+  email: z.string().trim().email(),
+  password: z.string().min(8),
+  role: z.enum([
+    "Owner",
+    "Admin",
+    "WarehouseStaff",
+    "SalesStaff",
+    "PurchasingStaff",
+    "Viewer",
+  ]),
+});
+
+export const userUpdateRoleSchema = z.object({
+  role: z.enum([
+    "Owner",
+    "Admin",
+    "WarehouseStaff",
+    "SalesStaff",
+    "PurchasingStaff",
+    "Viewer",
+  ]),
+});
+
 export const signInInputSchema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(8),

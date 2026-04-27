@@ -1,0 +1,23 @@
+{
+  "id": 333,
+  "title": "Mekanik Klavye MX",
+  "handle": "mekanik-klavye-mx",
+  "vendor": "TechLine",
+  "product_type": "Klavye",
+  "status": "active",
+  "variants": [
+    {
+      "id": 222,
+      "title": "Default Title",
+      "sku": "KBD-MX-001",
+      "barcode": "8690000001234",
+      "price": "499.00",
+      "compare_at_price": "599.00",
+      "inventory_item_id": 444,
+      "inventory_quantity": 50,
+      "weight": 0.85,
+      "weight_unit": "kg"
+    }
+  ],
+  "updated_at": "2025-03-15T10:30:00+03:00"
+}

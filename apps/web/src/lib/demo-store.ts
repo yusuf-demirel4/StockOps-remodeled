@@ -16,18 +16,22 @@ import {
   stockTransferInputSchema,
   supplierInputSchema,
   supplierUpdateInputSchema,
+  userInputSchema,
+  userUpdateRoleSchema,
   warehouseInputSchema,
   warehouseUpdateInputSchema,
 } from "@stockops/core/schemas";
-import { verifyPassword } from "@stockops/core/password";
+import { hashPassword, verifyPassword } from "@stockops/core/password";
 import type {
   AppState,
   AppSnapshot,
   AuthContext,
   AuditLog,
+  Member,
   NotificationDelivery,
   Product,
   PurchaseOrder,
+  Role,
   SalesOrder,
   Session,
   StockMovement,
@@ -107,6 +111,19 @@ export function getDemoSnapshot(context: AuthContext): AppSnapshot {
   const purchaseOrders = appState.purchaseOrders.filter(
     (order) => order.organizationId === organization.id,
   );
+  const members: Member[] = appState.memberships
+    .filter((m) => m.organizationId === organization.id)
+    .map((m) => {
+      const memberUser = appState.users.find((u) => u.id === m.userId);
+      return {
+        id: `mem_${m.userId}_${m.organizationId}`,
+        userId: m.userId,
+        name: memberUser?.name ?? "",
+        email: memberUser?.email ?? "",
+        role: m.role,
+        createdAt: new Date().toISOString(),
+      };
+    });
   const stockRows = buildStockRows(products, warehouses, stockMovements);
   const criticalRows = stockRows.filter((row) => row.isCritical);
 
@@ -117,6 +134,7 @@ export function getDemoSnapshot(context: AuthContext): AppSnapshot {
     warehouses,
     products,
     suppliers,
+    members,
     stockMovements,
     salesOrders,
     purchaseOrders,
@@ -896,6 +914,151 @@ export function receivePurchaseOrder(orderId: string, context?: AuthContext) {
     entityType: "PurchaseOrder",
     entityId: order.id,
     summary: `${order.code} teslim alındı`,
+  });
+}
+
+export function createUser(input: unknown, context?: AuthContext) {
+  const parsed = userInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(membership.role, "manage_users")) {
+    throw new Error("Bu rol kullanıcı yönetemez.");
+  }
+
+  const existingUser = appState.users.find(
+    (u) => u.email.toLowerCase() === parsed.email.toLowerCase(),
+  );
+
+  if (existingUser) {
+    const existingMembership = appState.memberships.find(
+      (m) =>
+        m.userId === existingUser.id &&
+        m.organizationId === organization.id,
+    );
+
+    if (existingMembership) {
+      throw new Error("Bu e-posta adresi zaten kayıtlı.");
+    }
+  }
+
+  const newUser = existingUser ?? {
+    id: id("usr"),
+    name: parsed.name,
+    email: parsed.email,
+    passwordHash: hashPassword(parsed.password),
+  };
+
+  if (!existingUser) {
+    appState.users.push(newUser);
+  }
+
+  appState.memberships.push({
+    organizationId: organization.id,
+    userId: newUser.id,
+    role: parsed.role as Role,
+  });
+
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "CREATE",
+    entityType: "User",
+    entityId: newUser.id,
+    summary: `${parsed.name} kullanıcısı ${parsed.role} rolüyle eklendi`,
+  });
+
+  return newUser;
+}
+
+export function updateUserRole(
+  membershipId: string,
+  input: unknown,
+  context?: AuthContext,
+) {
+  const parsed = userUpdateRoleSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const ctxMembership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(ctxMembership.role, "manage_users")) {
+    throw new Error("Bu rol kullanıcı yönetemez.");
+  }
+
+  const targetMembership = appState.memberships.find(
+    (m) =>
+      `mem_${m.userId}_${m.organizationId}` === membershipId &&
+      m.organizationId === organization.id,
+  );
+
+  if (!targetMembership) {
+    throw new Error("Kullanıcı bulunamadı.");
+  }
+
+  if (targetMembership.userId === user.id) {
+    throw new Error("Kendi rolünüzü değiştiremezsiniz.");
+  }
+
+  const targetUser = appState.users.find((u) => u.id === targetMembership.userId);
+  targetMembership.role = parsed.role as Role;
+
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "UPDATE",
+    entityType: "User",
+    entityId: targetMembership.userId,
+    summary: `${targetUser?.name} kullanıcısının rolü ${parsed.role} olarak güncellendi`,
+  });
+}
+
+export function deleteUser(membershipId: string, context?: AuthContext) {
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const ctxMembership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(ctxMembership.role, "manage_users")) {
+    throw new Error("Bu rol kullanıcı yönetemez.");
+  }
+
+  const targetIndex = appState.memberships.findIndex(
+    (m) =>
+      `mem_${m.userId}_${m.organizationId}` === membershipId &&
+      m.organizationId === organization.id,
+  );
+
+  if (targetIndex === -1) {
+    throw new Error("Kullanıcı bulunamadı.");
+  }
+
+  const targetMembership = appState.memberships[targetIndex];
+
+  if (targetMembership.userId === user.id) {
+    throw new Error("Kendinizi silemezsiniz.");
+  }
+
+  const targetUser = appState.users.find((u) => u.id === targetMembership.userId);
+  appState.memberships.splice(targetIndex, 1);
+
+  appState.sessions = appState.sessions.filter(
+    (s) =>
+      !(
+        s.userId === targetMembership.userId &&
+        s.organizationId === organization.id
+      ),
+  );
+
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "UPDATE",
+    entityType: "User",
+    entityId: targetMembership.userId,
+    summary: `${targetUser?.name} kullanıcısı organizasyondan çıkarıldı`,
   });
 }
 

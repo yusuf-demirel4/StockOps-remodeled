@@ -55,6 +55,13 @@ enum PaymentMethod {
   OTHER
 }
 
+enum SalesReturnStatus {
+  DRAFT
+  APPROVED
+  COMPLETED
+  CANCELLED
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -104,6 +111,7 @@ model Organization {
   products               Product[]
   purchaseOrders         PurchaseOrder[]
   salesOrders            SalesOrder[]
+  salesReturns           SalesReturn[]
   sessions               Session[]
   stockMovements         StockMovement[]
   suppliers              Supplier[]
@@ -205,12 +213,33 @@ model Product {
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   invoiceLines       InvoiceLine[]
   purchaseOrderLines PurchaseOrderLine[]
+  returnLines        SalesReturnLine[]
   salesOrderLines    SalesOrderLine[]
   stockMovements     StockMovement[]
   suppliers          ProductSupplier[]
+  variants           ProductVariant[]
 
   @@unique([organizationId, sku])
   @@index([organizationId, barcode])
+}
+
+model ProductVariant {
+  id          String   @id @default(cuid())
+  productId   String
+  sku         String
+  name        String
+  barcode     String?
+  unitPrice   Decimal  @default(0) @db.Decimal(12, 2)
+  costPrice   Decimal? @db.Decimal(12, 2)
+  weight      Decimal? @db.Decimal(8, 3)
+  isActive    Boolean  @default(true)
+  attributes  Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, sku])
+  @@index([productId])
 }
 
 model Supplier {
@@ -271,6 +300,7 @@ model SalesOrder {
   customer       Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
   lines          SalesOrderLine[]
   organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  returns        SalesReturn[]
 
   @@unique([organizationId, code])
   @@index([organizationId, status])
@@ -370,6 +400,34 @@ model NotificationDelivery {
 
   @@index([organizationId, status, createdAt])
   @@index([channel, provider])
+}
+
+model SalesReturn {
+  id             String            @id @default(cuid())
+  organizationId String
+  salesOrderId   String
+  code           String
+  reason         String?
+  status         SalesReturnStatus @default(DRAFT)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  lines          SalesReturnLine[]
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesOrder     SalesOrder        @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([salesOrderId])
+}
+
+model SalesReturnLine {
+  id             String      @id @default(cuid())
+  salesReturnId  String
+  productId      String
+  quantity       Int
+  restocked      Boolean     @default(false)
+  salesReturn    SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
+  product        Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
 }
 
 model Customer {

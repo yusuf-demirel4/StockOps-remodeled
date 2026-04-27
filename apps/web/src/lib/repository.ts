@@ -8,12 +8,15 @@ import {
   createStockMovement as createDemoStockMovement,
   createStockTransfer as createDemoStockTransfer,
   createSupplier as createDemoSupplier,
+  createUser as createDemoUser,
   createWarehouse as createDemoWarehouse,
+  deleteUser as deleteDemoUser,
   getDemoSnapshot,
   receivePurchaseOrder as receiveDemoPurchaseOrder,
   setProductActive as setDemoProductActive,
   updateProduct as updateDemoProduct,
   updateSupplier as updateDemoSupplier,
+  updateUserRole as updateDemoUserRole,
   updateWarehouse as updateDemoWarehouse,
 } from "@/lib/demo-store";
 import { getPrisma } from "@/lib/prisma";
@@ -22,10 +25,15 @@ import {
   productUpdateInputSchema,
   purchaseOrderInputSchema,
   salesOrderInputSchema,
+  salesReturnInputSchema,
   stockMovementInputSchema,
   stockTransferInputSchema,
   supplierInputSchema,
   supplierUpdateInputSchema,
+  userInputSchema,
+  userUpdateRoleSchema,
+  variantInputSchema,
+  variantUpdateInputSchema,
   warehouseInputSchema,
   warehouseUpdateInputSchema,
 } from "@stockops/core/schemas";
@@ -35,14 +43,20 @@ import {
   getOpenPurchaseOrders,
   getOpenSalesOrders,
 } from "@stockops/core/inventory";
+import { hashPassword } from "@stockops/core/password";
 import type {
   AppSnapshot,
   AuthContext,
+  Member,
   NotificationDelivery,
   Product,
+  ProductVariant,
   PurchaseOrder,
   PurchaseOrderLine,
+  Role,
   SalesOrder,
+  SalesReturn,
+  SalesReturnLine,
   StockMovement,
   StockMovementType,
   Supplier,
@@ -224,6 +238,7 @@ export async function getAppSnapshot(
     auditLogs,
     webhookEvents,
     notificationDeliveries,
+    memberships,
   ] = await Promise.all([
     prisma.warehouse.findMany({
       where: { organizationId },
@@ -268,6 +283,11 @@ export async function getAppSnapshot(
       orderBy: { createdAt: "desc" },
       take: 12,
     }),
+    prisma.membership.findMany({
+      where: { organizationId },
+      include: { user: true },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
 
   const mappedProducts = products.map(mapProduct);
@@ -309,6 +329,14 @@ export async function getAppSnapshot(
       receivedQuantity: line.receivedQuantity,
     })),
   }));
+  const mappedMembers: Member[] = memberships.map((m) => ({
+    id: m.id,
+    userId: m.userId,
+    name: m.user.name,
+    email: m.user.email,
+    role: m.role as Role,
+    createdAt: iso(m.createdAt),
+  }));
   const stockRows = buildStockRows(
     mappedProducts,
     mappedWarehouses,
@@ -322,6 +350,7 @@ export async function getAppSnapshot(
     warehouses: mappedWarehouses,
     products: mappedProducts,
     suppliers: mappedSuppliers,
+    members: mappedMembers,
     stockMovements: mappedMovements,
     salesOrders: mappedSalesOrders,
     purchaseOrders: mappedPurchaseOrders,
@@ -1022,6 +1051,466 @@ export async function receivePurchaseOrder(
         entityType: "PurchaseOrder",
         entityId: order.id,
         summary: `${order.code} teslim alındı`,
+      },
+    });
+  });
+}
+
+export async function createVariant(input: unknown, context: AuthContext) {
+  ensurePermission(context, "manage_products");
+  const parsed = variantInputSchema.parse(input);
+  const prisma = getPrisma();
+
+  const product = await prisma.product.findFirst({
+    where: { id: parsed.productId, organizationId: context.organization.id },
+  });
+
+  if (!product) {
+    throw new Error("Ürün bulunamadı.");
+  }
+
+  let attributes: Record<string, string> = {};
+  if (parsed.attributes) {
+    try {
+      attributes = JSON.parse(parsed.attributes);
+    } catch {
+      throw new Error("Geçersiz özellik formatı. JSON formatında giriniz.");
+    }
+  }
+
+  const variant = await prisma.productVariant
+    .create({
+      data: {
+        productId: product.id,
+        sku: parsed.sku,
+        name: parsed.name,
+        barcode: parsed.barcode || null,
+        unitPrice: parsed.unitPrice ?? 0,
+        costPrice: parsed.costPrice ?? null,
+        weight: parsed.weight ?? null,
+        attributes,
+      },
+    })
+    .catch((error: unknown) => {
+      if (isUniqueConstraintError(error)) {
+        throw new Error("Bu varyant SKU zaten kayıtlı.");
+      }
+      throw error;
+    });
+
+  await audit(
+    context,
+    "CREATE",
+    "ProductVariant",
+    variant.id,
+    `${variant.sku} varyantı oluşturuldu (${product.sku})`,
+  );
+}
+
+export async function updateVariant(
+  variantId: string,
+  input: unknown,
+  context: AuthContext,
+) {
+  ensureRecordId(variantId, "Varyant");
+  ensurePermission(context, "manage_products");
+  const parsed = variantUpdateInputSchema.parse(input);
+  const prisma = getPrisma();
+
+  const variant = await prisma.productVariant.findFirst({
+    where: { id: variantId },
+    include: { product: true },
+  });
+
+  if (!variant || variant.product.organizationId !== context.organization.id) {
+    throw new Error("Varyant bulunamadı.");
+  }
+
+  let attributes: Record<string, string> | undefined;
+  if (parsed.attributes !== undefined) {
+    try {
+      attributes = parsed.attributes ? JSON.parse(parsed.attributes) : {};
+    } catch {
+      throw new Error("Geçersiz özellik formatı.");
+    }
+  }
+
+  const updated = await prisma.productVariant
+    .update({
+      where: { id: variant.id },
+      data: {
+        sku: parsed.sku,
+        name: parsed.name,
+        barcode: parsed.barcode === undefined ? undefined : parsed.barcode || null,
+        unitPrice: parsed.unitPrice,
+        costPrice: parsed.costPrice === undefined ? undefined : parsed.costPrice ?? null,
+        weight: parsed.weight === undefined ? undefined : parsed.weight ?? null,
+        attributes: attributes ?? undefined,
+      },
+    })
+    .catch((error: unknown) => {
+      if (isUniqueConstraintError(error)) {
+        throw new Error("Bu varyant SKU zaten kayıtlı.");
+      }
+      throw error;
+    });
+
+  await audit(
+    context,
+    "UPDATE",
+    "ProductVariant",
+    updated.id,
+    `${updated.sku} varyantı güncellendi`,
+  );
+}
+
+export async function deleteVariant(variantId: string, context: AuthContext) {
+  ensureRecordId(variantId, "Varyant");
+  ensurePermission(context, "manage_products");
+  const prisma = getPrisma();
+
+  const variant = await prisma.productVariant.findFirst({
+    where: { id: variantId },
+    include: { product: true },
+  });
+
+  if (!variant || variant.product.organizationId !== context.organization.id) {
+    throw new Error("Varyant bulunamadı.");
+  }
+
+  await prisma.productVariant.delete({ where: { id: variant.id } });
+
+  await audit(
+    context,
+    "UPDATE",
+    "ProductVariant",
+    variant.id,
+    `${variant.sku} varyantı silindi`,
+  );
+}
+
+export async function getProductVariants(
+  productId: string,
+  context: AuthContext,
+): Promise<ProductVariant[]> {
+  const prisma = getPrisma();
+
+  const product = await prisma.product.findFirst({
+    where: { id: productId, organizationId: context.organization.id },
+  });
+
+  if (!product) {
+    throw new Error("Ürün bulunamadı.");
+  }
+
+  const variants = await prisma.productVariant.findMany({
+    where: { productId: product.id },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return variants.map((v) => ({
+    id: v.id,
+    productId: v.productId,
+    sku: v.sku,
+    name: v.name,
+    barcode: v.barcode ?? undefined,
+    unitPrice: Number(v.unitPrice),
+    costPrice: v.costPrice ? Number(v.costPrice) : undefined,
+    weight: v.weight ? Number(v.weight) : undefined,
+    isActive: v.isActive,
+    attributes: (v.attributes as Record<string, string>) ?? {},
+  }));
+}
+
+export async function createSalesReturn(input: unknown, context: AuthContext) {
+  ensurePermission(context, "manage_sales");
+  const parsed = salesReturnInputSchema.parse(input);
+  const prisma = getPrisma();
+
+  const order = await prisma.salesOrder.findFirst({
+    where: {
+      id: parsed.salesOrderId,
+      organizationId: context.organization.id,
+      status: "CONFIRMED",
+    },
+    include: { lines: true },
+  });
+
+  if (!order) {
+    throw new Error("Onaylanmış sipariş bulunamadı.");
+  }
+
+  for (const line of parsed.lines) {
+    const orderLine = order.lines.find((ol) => ol.productId === line.productId);
+    if (!orderLine) {
+      throw new Error(`Ürün ${line.productId} bu siparişte bulunmuyor.`);
+    }
+    if (line.quantity > orderLine.quantity) {
+      throw new Error(
+        `İade miktarı sipariş miktarını aşamaz (${orderLine.quantity}).`,
+      );
+    }
+  }
+
+  const returnCount = await prisma.salesReturn.count({
+    where: { organizationId: context.organization.id },
+  });
+  const returnCode = nextCode("RET", returnCount);
+
+  const salesReturn = await prisma.$transaction(async (tx) => {
+    const created = await tx.salesReturn.create({
+      data: {
+        organizationId: context.organization.id,
+        salesOrderId: order.id,
+        code: returnCode,
+        reason: parsed.reason || null,
+        status: "DRAFT",
+        lines: {
+          create: parsed.lines.map((line) => ({
+            productId: line.productId,
+            quantity: line.quantity,
+          })),
+        },
+      },
+      include: { lines: true },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action: "CREATE",
+        entityType: "SalesReturn",
+        entityId: created.id,
+        summary: `${returnCode} iade talebi oluşturuldu (sipariş: ${order.code})`,
+      },
+    });
+
+    return created;
+  });
+
+  return salesReturn;
+}
+
+export async function approveSalesReturn(returnId: string, context: AuthContext) {
+  ensurePermission(context, "manage_sales");
+  const prisma = getPrisma();
+
+  await prisma.$transaction(async (tx) => {
+    const salesReturn = await tx.salesReturn.findFirst({
+      where: {
+        id: returnId,
+        organizationId: context.organization.id,
+        status: "DRAFT",
+      },
+      include: { lines: true, salesOrder: true },
+    });
+
+    if (!salesReturn) {
+      throw new Error("İade talebi bulunamadı veya onaylanamaz.");
+    }
+
+    const warehouse = await tx.warehouse.findFirst({
+      where: { organizationId: context.organization.id, isDefault: true },
+    });
+
+    if (!warehouse) {
+      throw new Error("Varsayılan depo bulunamadı.");
+    }
+
+    // Create stock reversal movements
+    await tx.stockMovement.createMany({
+      data: salesReturn.lines.map((line) => ({
+        organizationId: context.organization.id,
+        warehouseId: warehouse.id,
+        productId: line.productId,
+        type: "INBOUND" as const,
+        quantityChange: line.quantity,
+        reference: salesReturn.code,
+        note: `İade: ${salesReturn.salesOrder.code}`,
+        createdById: context.user.id,
+      })),
+    });
+
+    // Mark lines as restocked
+    await Promise.all(
+      salesReturn.lines.map((line) =>
+        tx.salesReturnLine.update({
+          where: { id: line.id },
+          data: { restocked: true },
+        }),
+      ),
+    );
+
+    await tx.salesReturn.update({
+      where: { id: salesReturn.id },
+      data: { status: "COMPLETED" },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action: "CONFIRM",
+        entityType: "SalesReturn",
+        entityId: salesReturn.id,
+        summary: `${salesReturn.code} iade onaylandı, stok iade edildi`,
+      },
+    });
+  });
+}
+
+export async function createUser(input: unknown, context: AuthContext) {
+  if (!dbMode()) {
+    return createDemoUser(input, context);
+  }
+
+  ensurePermission(context, "manage_users");
+  const parsed = userInputSchema.parse(input);
+  const prisma = getPrisma();
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email: parsed.email },
+  });
+
+  if (existingUser) {
+    const existingMembership = await prisma.membership.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId: context.organization.id,
+          userId: existingUser.id,
+        },
+      },
+    });
+
+    if (existingMembership) {
+      throw new Error("Bu e-posta adresi zaten kayıtlı.");
+    }
+  }
+
+  const passwordHash = hashPassword(parsed.password);
+
+  await prisma.$transaction(async (tx) => {
+    const user = existingUser ??
+      await tx.user.create({
+        data: {
+          name: parsed.name,
+          email: parsed.email,
+          passwordHash,
+        },
+      });
+
+    if (!existingUser) {
+      // user was just created above
+    } else {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { name: parsed.name, passwordHash },
+      });
+    }
+
+    await tx.membership.create({
+      data: {
+        organizationId: context.organization.id,
+        userId: user.id,
+        role: parsed.role as any,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action: "CREATE",
+        entityType: "User",
+        entityId: user.id,
+        summary: `${parsed.name} kullanıcısı ${parsed.role} rolüyle eklendi`,
+      },
+    });
+  });
+}
+
+export async function updateUserRole(
+  membershipId: string,
+  input: unknown,
+  context: AuthContext,
+) {
+  if (!dbMode()) {
+    return updateDemoUserRole(membershipId, input, context);
+  }
+
+  ensureRecordId(membershipId, "Üyelik");
+  ensurePermission(context, "manage_users");
+  const parsed = userUpdateRoleSchema.parse(input);
+  const prisma = getPrisma();
+
+  const membership = await prisma.membership.findFirst({
+    where: { id: membershipId, organizationId: context.organization.id },
+    include: { user: true },
+  });
+
+  if (!membership) {
+    throw new Error("Kullanıcı bulunamadı.");
+  }
+
+  if (membership.userId === context.user.id) {
+    throw new Error("Kendi rolünüzü değiştiremezsiniz.");
+  }
+
+  await prisma.membership.update({
+    where: { id: membership.id },
+    data: { role: parsed.role as any },
+  });
+
+  await audit(
+    context,
+    "UPDATE",
+    "User",
+    membership.userId,
+    `${membership.user.name} kullanıcısının rolü ${parsed.role} olarak güncellendi`,
+  );
+}
+
+export async function deleteUser(membershipId: string, context: AuthContext) {
+  if (!dbMode()) {
+    return deleteDemoUser(membershipId, context);
+  }
+
+  ensureRecordId(membershipId, "Üyelik");
+  ensurePermission(context, "manage_users");
+  const prisma = getPrisma();
+
+  const membership = await prisma.membership.findFirst({
+    where: { id: membershipId, organizationId: context.organization.id },
+    include: { user: true },
+  });
+
+  if (!membership) {
+    throw new Error("Kullanıcı bulunamadı.");
+  }
+
+  if (membership.userId === context.user.id) {
+    throw new Error("Kendinizi silemezsiniz.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.session.deleteMany({
+      where: {
+        userId: membership.userId,
+        organizationId: context.organization.id,
+      },
+    });
+
+    await tx.membership.delete({ where: { id: membership.id } });
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action: "UPDATE",
+        entityType: "User",
+        entityId: membership.userId,
+        summary: `${membership.user.name} kullanıcısı organizasyondan çıkarıldı`,
       },
     });
   });
