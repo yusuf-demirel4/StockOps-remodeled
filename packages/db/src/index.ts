@@ -1,1 +1,1 @@
-export { getPrisma } from "./client";
+export { getPrisma, getPrisma as getDbClient } from "./client";
