@@ -164,10 +164,14 @@ model User {
   name           String
   email          String          @unique
   passwordHash   String?
+  twoFactorEnabled Boolean       @default(false)
   createdAt      DateTime        @default(now())
   apiTokens      ApiToken[]
   auditLogs      AuditLog[]
+  backupCodes    BackupCode[]
+  oAuthAccounts  OAuthAccount[]
   memberships    Membership[]
+  totpSecret     TotpSecret?
   pickLists      PickList[]
   sessions       Session[]
   stockMovements StockMovement[]
@@ -195,6 +199,9 @@ model Session {
   userId         String
   organizationId String
   tokenHash      String       @unique
+  ipAddress      String?
+  userAgent      String?
+  lastActiveAt   DateTime     @default(now())
   expiresAt      DateTime
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -203,6 +210,7 @@ model Session {
   @@index([userId])
   @@index([organizationId])
   @@index([expiresAt])
+  @@index([lastActiveAt])
 }
 
 model Membership {
@@ -550,6 +558,40 @@ model Payment {
 
   @@index([organizationId, paidAt])
   @@index([invoiceId])
+}
+
+model OAuthAccount {
+  id             String       @id @default(cuid())
+  userId         String
+  provider       String
+  providerUserId String
+  accessToken    String
+  refreshToken   String?
+  expiresAt      DateTime?
+  createdAt      DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+model TotpSecret {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  encryptedSecret  String
+  verified         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BackupCode {
+  id        String   @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model AccountingConnection {

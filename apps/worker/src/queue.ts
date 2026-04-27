@@ -41,6 +41,17 @@ export async function handleJob(job: QueueJob) {
       return handleStockSyncDispatch(
         job as QueueJob<"integrations.stock-sync.dispatch">,
       );
+    case "xero.invoice.sync":
+    case "xero.payment.sync":
+    case "xero.product.sync":
+    case "quickbooks.invoice.sync":
+    case "quickbooks.payment.sync":
+    case "quickbooks.product.sync":
+      return {
+        status: "skipped",
+        jobId: job.id,
+        reason: "accounting-sync-not-implemented",
+      };
     default: {
       const exhaustive: never = job.name;
       return exhaustive;

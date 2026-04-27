@@ -24,6 +24,13 @@ export type OrderStatusEvent = {
   timestamp: string;
 };
 
+export type PickListUpdateEvent = {
+  pickListId: string;
+  itemId: string;
+  pickedQty: number;
+  percentComplete: number;
+};
+
 @Injectable()
 @WebSocketGateway({
   cors: { origin: "*" },
@@ -71,6 +78,10 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   broadcastOrderStatus(organizationId: string, event: OrderStatusEvent) {
     this.server.to(`org:${organizationId}`).emit("order:status", event);
+  }
+
+  broadcastPickListUpdate(organizationId: string, event: PickListUpdateEvent) {
+    this.server.to(`org:${organizationId}`).emit("pick-list:updated", event);
   }
 
   broadcastInvoiceCreated(organizationId: string, invoiceCode: string) {

@@ -1,5 +1,5 @@
 import { getDbClient } from "@stockops/db";
-import { resolveQueueConfig } from "@stockops/queue/config";
+import { resolveQueueConfig } from "@stockops/queue";
 
 type ServiceStatus = "up" | "down";
 
