@@ -116,6 +116,22 @@ enum NotificationDeliveryStatus {
   SKIPPED
 }
 
+enum AccountingProvider {
+  XERO
+  QUICKBOOKS
+}
+
+enum SyncDirection {
+  PUSH
+  PULL
+}
+
+enum SyncStatus {
+  SUCCESS
+  FAILED
+  CONFLICT
+}
+
 model Organization {
   id                     String                 @id @default(cuid())
   name                   String
@@ -127,6 +143,7 @@ model Organization {
   customers              Customer[]
   invoices               Invoice[]
   memberships            Membership[]
+  accountingConnections  AccountingConnection[]
   notificationDeliveries NotificationDelivery[]
   payments               Payment[]
   products               Product[]
@@ -533,6 +550,42 @@ model Payment {
 
   @@index([organizationId, paidAt])
   @@index([invoiceId])
+}
+
+model AccountingConnection {
+  id             String             @id @default(cuid())
+  organizationId String
+  provider       AccountingProvider
+  tenantId       String
+  accessToken    String
+  refreshToken   String
+  tokenExpiresAt DateTime
+  lastSyncAt     DateTime?
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  syncLogs       AccountingSyncLog[]
+
+  @@index([organizationId])
+  @@unique([organizationId, provider])
+}
+
+model AccountingSyncLog {
+  id            String          @id @default(cuid())
+  connectionId  String
+  direction     SyncDirection
+  entityType    String
+  entityId      String
+  externalId    String?
+  status        SyncStatus
+  error         String?
+  resolvedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  connection    AccountingConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId, createdAt])
+  @@index([entityType, entityId])
 }
 
 model Shipment {
