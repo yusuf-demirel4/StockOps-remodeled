@@ -56,8 +56,7 @@ import type {
   Role,
   SalesOrder,
   SalesReturn,
-  SalesReturnLine,
-  StockMovement,
+    StockMovement,
   StockMovementType,
   Supplier,
   WebhookEvent,
@@ -98,7 +97,7 @@ function mapProduct(product: {
   description: string | null;
   minimumStock: number;
   isActive: boolean;
-  unitPrice?: any;
+  unitPrice?: number | null;
 }): Product {
   return {
     id: product.id,
@@ -1455,6 +1454,7 @@ export async function createUser(input: unknown, context: AuthContext) {
       data: {
         organizationId: context.organization.id,
         userId: user.id,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         role: parsed.role as any,
       },
     });
@@ -1501,6 +1501,7 @@ export async function updateUserRole(
 
   await prisma.membership.update({
     where: { id: membership.id },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data: { role: parsed.role as any },
   });
 
@@ -1592,6 +1593,7 @@ export async function getSalesOrderDetails(orderId: string, context: AuthContext
       lines: order.lines.map(l => ({ ...l, id: l.productId, product: snapshot.products.find(p => p.id === l.productId)! })),
       pickListItems: [],
       shipments: []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
     return { order: mockOrder, pickLists: [] };
   }
@@ -1635,8 +1637,7 @@ export async function startPicking(orderId: string, context: AuthContext) {
     const count = await tx.pickList.count({
       where: { organizationId: context.organization.id },
     });
-    const pickListId = nextCode("PL", count);
-
+    
     await tx.salesOrder.update({
       where: { id: order.id },
       data: { status: "PICKING" },

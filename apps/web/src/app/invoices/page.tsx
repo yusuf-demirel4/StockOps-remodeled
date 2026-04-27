@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function InvoicesPage() {
   const context = await requireAuth();
   
-  let invoices: any[] = [];
+  let invoices: Invoice[] = [];
   if (getDataSourceMode() === "database") {
     const raw = await getPrisma().invoice.findMany({
       where: { organizationId: context.organization.id },

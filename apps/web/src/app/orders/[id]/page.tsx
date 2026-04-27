@@ -1,19 +1,18 @@
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Circle, Truck, Package, PackageCheck, ClipboardList, Check } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Truck, Package, PackageCheck, ClipboardList, Check } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Panel, StatusBadge } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
 import { getAppSnapshot, getSalesOrderDetails } from "@/lib/repository";
-import { salesStatusLabel, productSku } from "@stockops/core/format";
+import { salesStatusLabel } from "@stockops/core/format";
 import { PickListForm } from "@/components/pick-list-form";
 import { ShipmentForm } from "@/components/shipment-form";
-import { ActionForm, submitClass } from "@/components/action-form";
 import { StartPickingForm, MarkPackedForm, DeliverOrderForm } from "@/components/order-actions";
 import { SalesOrderStatus } from "@stockops/core/types";
 
 export const dynamic = "force-dynamic";
 
-const STAGES: { id: SalesOrderStatus; label: string; icon: any }[] = [
+const STAGES: { id: SalesOrderStatus; label: string; icon: React.ElementType }[] = [
   { id: "DRAFT", label: "Taslak", icon: ClipboardList },
   { id: "CONFIRMED", label: "Onaylandı", icon: CheckCircle2 },
   { id: "PICKING", label: "Toplanıyor", icon: Package },
@@ -35,9 +34,8 @@ export default async function OrderDetailPage({
   const currentStageIndex = STAGES.findIndex((s) => s.id === order.status);
   const isCancelled = order.status === "CANCELLED";
 
-  const allPickListItems = pickLists.flatMap(pl => pl.items);
   const activePickList = pickLists.find(pl => pl.status !== "COMPLETED" && pl.status !== "CANCELLED") || pickLists[0];
-  const activeShipment = order.shipments?.find((s: any) => s.status !== "RETURNED") || order.shipments?.[0];
+  const activeShipment = order.shipments?.find((s: { status: string }) => s.status !== "RETURNED") || order.shipments?.[0];
 
   return (
     <AppShell
@@ -77,7 +75,6 @@ export default async function OrderDetailPage({
                   {STAGES.map((stage, index) => {
                     const isCompleted = index < currentStageIndex || order.status === "DELIVERED";
                     const isActive = index === currentStageIndex;
-                    const isFuture = index > currentStageIndex;
                     const Icon = stage.icon;
 
                     return (
@@ -202,7 +199,7 @@ export default async function OrderDetailPage({
 
           <Panel title="Sipariş Kalemleri">
             <ul className="divide-y divide-[#e3e5dd]">
-              {order.lines.map((line: any) => (
+              {order.lines.map((line: { id: string; product: { name: string; sku: string }; quantity: number }) => (
                 <li key={line.id} className="py-3 first:pt-0 last:pb-0 flex justify-between items-center">
                   <div>
                     <p className="font-medium text-[#1f2523] text-sm">

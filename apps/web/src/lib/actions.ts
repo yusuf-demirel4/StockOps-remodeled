@@ -17,7 +17,7 @@ import {
   createUser,
   createVariant,
   createWarehouse,
-  deleteUser,
+  
   deleteVariant,
   receivePurchaseOrder,
   setProductActive,
