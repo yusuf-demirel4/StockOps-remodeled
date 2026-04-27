@@ -400,10 +400,12 @@ export async function createSalesReturnAction(
   const productIds = formData.getAll("productId") as string[];
   const quantities = formData.getAll("quantity") as string[];
 
-  const lines = productIds.map((productId, i) => ({
-    productId,
-    quantity: quantities[i],
-  }));
+  const lines = productIds
+    .map((productId, i) => ({
+      productId,
+      quantity: quantities[i],
+    }))
+    .filter((line) => Number(line.quantity) > 0);
 
   return runMutation("İade talebi oluşturuldu.", (context) =>
     createSalesReturn(

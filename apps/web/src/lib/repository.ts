@@ -235,6 +235,8 @@ export async function getAppSnapshot(
     stockMovements,
     salesOrders,
     purchaseOrders,
+    salesReturns,
+    productVariants,
     auditLogs,
     webhookEvents,
     notificationDeliveries,
@@ -267,6 +269,15 @@ export async function getAppSnapshot(
       where: { organizationId },
       include: { lines: true },
       orderBy: { createdAt: "desc" },
+    }),
+    prisma.salesReturn.findMany({
+      where: { organizationId },
+      include: { lines: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.productVariant.findMany({
+      where: { product: { organizationId } },
+      orderBy: { createdAt: "asc" },
     }),
     prisma.auditLog.findMany({
       where: { organizationId },
@@ -343,6 +354,35 @@ export async function getAppSnapshot(
     mappedMovements,
   );
 
+  const mappedSalesReturns: SalesReturn[] = salesReturns.map((salesReturn) => ({
+    id: salesReturn.id,
+    organizationId: salesReturn.organizationId,
+    salesOrderId: salesReturn.salesOrderId,
+    code: salesReturn.code,
+    reason: salesReturn.reason ?? undefined,
+    status: salesReturn.status,
+    createdAt: iso(salesReturn.createdAt),
+    lines: salesReturn.lines.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+      restocked: line.restocked,
+    })),
+  }));
+  const mappedProductVariants: ProductVariant[] = productVariants.map(
+    (variant) => ({
+      id: variant.id,
+      productId: variant.productId,
+      sku: variant.sku,
+      name: variant.name,
+      barcode: variant.barcode ?? undefined,
+      unitPrice: Number(variant.unitPrice),
+      costPrice: variant.costPrice ? Number(variant.costPrice) : undefined,
+      weight: variant.weight ? Number(variant.weight) : undefined,
+      isActive: variant.isActive,
+      attributes: (variant.attributes as Record<string, string>) ?? {},
+    }),
+  );
+
   return {
     organization: context.organization,
     user: context.user,
@@ -354,6 +394,8 @@ export async function getAppSnapshot(
     stockMovements: mappedMovements,
     salesOrders: mappedSalesOrders,
     purchaseOrders: mappedPurchaseOrders,
+    salesReturns: mappedSalesReturns,
+    productVariants: mappedProductVariants,
     stockRows,
     criticalRows: stockRows.filter((row) => row.isCritical),
     openSalesOrders: getOpenSalesOrders(mappedSalesOrders),

@@ -16,10 +16,13 @@ import {
   productUpdateInputSchema,
   purchaseOrderInputSchema,
   salesOrderInputSchema,
+  salesReturnInputSchema,
   stockMovementInputSchema,
   stockTransferInputSchema,
   supplierInputSchema,
   supplierUpdateInputSchema,
+  variantInputSchema,
+  variantUpdateInputSchema,
   warehouseInputSchema,
   warehouseUpdateInputSchema,
   customerInputSchema,
@@ -30,9 +33,11 @@ import type {
   AppState,
   AuthContext,
   Product,
+  ProductVariant,
   PurchaseOrder,
   PurchaseOrderLine,
   SalesOrder,
+  SalesReturn,
   StockMovement,
   StockMovementType,
   Supplier,
@@ -1414,6 +1419,446 @@ export class StockOpsApiService {
     };
     demoState().invoices.unshift(invoice);
     return invoice;
+  }
+
+  async listProductVariants(
+    productId: string,
+    context: AuthContext,
+  ): Promise<ProductVariant[]> {
+    if (!dbMode()) {
+      return [];
+    }
+
+    const prisma = getPrisma();
+    const product = await prisma.product.findFirst({
+      where: { id: productId, organizationId: context.organization.id },
+      select: { id: true },
+    });
+
+    if (!product) {
+      throw new NotFoundException("Product not found.");
+    }
+
+    const variants = await prisma.productVariant.findMany({
+      where: { productId: product.id },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return variants.map((variant) => ({
+      id: variant.id,
+      productId: variant.productId,
+      sku: variant.sku,
+      name: variant.name,
+      barcode: variant.barcode ?? undefined,
+      unitPrice: Number(variant.unitPrice),
+      costPrice: variant.costPrice ? Number(variant.costPrice) : undefined,
+      weight: variant.weight ? Number(variant.weight) : undefined,
+      isActive: variant.isActive,
+      attributes: (variant.attributes as Record<string, string>) ?? {},
+    }));
+  }
+
+  async createProductVariant(
+    productId: string,
+    input: unknown,
+    context: AuthContext,
+  ): Promise<ProductVariant> {
+    if (!dbMode()) {
+      throw new BadRequestException(
+        "Variant management requires database mode.",
+      );
+    }
+
+    const parsed = parseInput(variantInputSchema, {
+      ...((input as Record<string, unknown>) ?? {}),
+      productId,
+    });
+
+    const prisma = getPrisma();
+    const product = await prisma.product.findFirst({
+      where: { id: productId, organizationId: context.organization.id },
+      select: { id: true },
+    });
+
+    if (!product) {
+      throw new NotFoundException("Product not found.");
+    }
+
+    const attributes = this.parseVariantAttributes(parsed.attributes);
+
+    try {
+      const variant = await prisma.productVariant.create({
+        data: {
+          productId: product.id,
+          sku: parsed.sku,
+          name: parsed.name,
+          barcode: parsed.barcode || null,
+          unitPrice: parsed.unitPrice ?? 0,
+          costPrice: parsed.costPrice ?? null,
+          weight: parsed.weight ?? null,
+          attributes,
+        },
+      });
+
+      await this.audit(
+        context,
+        "CREATE",
+        "ProductVariant",
+        variant.id,
+        variant.sku,
+      );
+
+      return {
+        id: variant.id,
+        productId: variant.productId,
+        sku: variant.sku,
+        name: variant.name,
+        barcode: variant.barcode ?? undefined,
+        unitPrice: Number(variant.unitPrice),
+        costPrice: variant.costPrice ? Number(variant.costPrice) : undefined,
+        weight: variant.weight ? Number(variant.weight) : undefined,
+        isActive: variant.isActive,
+        attributes,
+      };
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Unique constraint")) {
+        throw new ConflictException("Variant SKU already exists.");
+      }
+      throw error;
+    }
+  }
+
+  async updateProductVariant(
+    variantId: string,
+    input: unknown,
+    context: AuthContext,
+  ): Promise<ProductVariant> {
+    if (!dbMode()) {
+      throw new BadRequestException(
+        "Variant management requires database mode.",
+      );
+    }
+
+    const parsed = parseInput(variantUpdateInputSchema, input);
+    const prisma = getPrisma();
+
+    const existing = await prisma.productVariant.findFirst({
+      where: { id: variantId },
+      include: { product: { select: { organizationId: true } } },
+    });
+
+    if (
+      !existing ||
+      existing.product.organizationId !== context.organization.id
+    ) {
+      throw new NotFoundException("Variant not found.");
+    }
+
+    const attributes =
+      parsed.attributes !== undefined
+        ? this.parseVariantAttributes(parsed.attributes)
+        : undefined;
+
+    try {
+      const updated = await prisma.productVariant.update({
+        where: { id: existing.id },
+        data: {
+          sku: parsed.sku,
+          name: parsed.name,
+          barcode:
+            parsed.barcode === undefined ? undefined : parsed.barcode || null,
+          unitPrice: parsed.unitPrice,
+          costPrice:
+            parsed.costPrice === undefined
+              ? undefined
+              : parsed.costPrice ?? null,
+          weight:
+            parsed.weight === undefined ? undefined : parsed.weight ?? null,
+          attributes,
+        },
+      });
+
+      await this.audit(
+        context,
+        "UPDATE",
+        "ProductVariant",
+        updated.id,
+        updated.sku,
+      );
+
+      return {
+        id: updated.id,
+        productId: updated.productId,
+        sku: updated.sku,
+        name: updated.name,
+        barcode: updated.barcode ?? undefined,
+        unitPrice: Number(updated.unitPrice),
+        costPrice: updated.costPrice ? Number(updated.costPrice) : undefined,
+        weight: updated.weight ? Number(updated.weight) : undefined,
+        isActive: updated.isActive,
+        attributes: (updated.attributes as Record<string, string>) ?? {},
+      };
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Unique constraint")) {
+        throw new ConflictException("Variant SKU already exists.");
+      }
+      throw error;
+    }
+  }
+
+  async deleteProductVariant(variantId: string, context: AuthContext) {
+    if (!dbMode()) {
+      throw new BadRequestException(
+        "Variant management requires database mode.",
+      );
+    }
+
+    const prisma = getPrisma();
+    const existing = await prisma.productVariant.findFirst({
+      where: { id: variantId },
+      include: { product: { select: { organizationId: true } } },
+    });
+
+    if (
+      !existing ||
+      existing.product.organizationId !== context.organization.id
+    ) {
+      throw new NotFoundException("Variant not found.");
+    }
+
+    await prisma.productVariant.delete({ where: { id: existing.id } });
+    await this.audit(
+      context,
+      "UPDATE",
+      "ProductVariant",
+      existing.id,
+      `${existing.sku} deleted`,
+    );
+
+    return { id: existing.id, deleted: true };
+  }
+
+  private parseVariantAttributes(value: string | undefined) {
+    if (!value) {
+      return {};
+    }
+
+    try {
+      const parsed = JSON.parse(value);
+
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, string>;
+      }
+
+      throw new Error("not-object");
+    } catch {
+      throw new BadRequestException(
+        "Variant attributes must be a JSON object string.",
+      );
+    }
+  }
+
+  async listSalesReturns(context: AuthContext): Promise<SalesReturn[]> {
+    if (!dbMode()) {
+      return [];
+    }
+
+    const returns = await getPrisma().salesReturn.findMany({
+      where: { organizationId: context.organization.id },
+      include: { lines: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return returns.map((salesReturn) => ({
+      id: salesReturn.id,
+      organizationId: salesReturn.organizationId,
+      salesOrderId: salesReturn.salesOrderId,
+      code: salesReturn.code,
+      reason: salesReturn.reason ?? undefined,
+      status: salesReturn.status,
+      createdAt: salesReturn.createdAt.toISOString(),
+      lines: salesReturn.lines.map((line) => ({
+        productId: line.productId,
+        quantity: line.quantity,
+        restocked: line.restocked,
+      })),
+    }));
+  }
+
+  async createSalesReturn(input: unknown, context: AuthContext) {
+    if (!dbMode()) {
+      throw new BadRequestException(
+        "Sales returns require database mode.",
+      );
+    }
+
+    const parsed = parseInput(salesReturnInputSchema, input);
+    const prisma = getPrisma();
+
+    const order = await prisma.salesOrder.findFirst({
+      where: {
+        id: parsed.salesOrderId,
+        organizationId: context.organization.id,
+        status: "CONFIRMED",
+      },
+      include: { lines: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(
+        "Confirmed sales order not found.",
+      );
+    }
+
+    for (const line of parsed.lines) {
+      const orderLine = order.lines.find(
+        (ol) => ol.productId === line.productId,
+      );
+
+      if (!orderLine) {
+        throw new BadRequestException(
+          `Product ${line.productId} is not part of this order.`,
+        );
+      }
+
+      if (line.quantity > orderLine.quantity) {
+        throw new BadRequestException(
+          `Return quantity exceeds ordered quantity (${orderLine.quantity}).`,
+        );
+      }
+    }
+
+    const count = await prisma.salesReturn.count({
+      where: { organizationId: context.organization.id },
+    });
+    const code = nextCode("RET", count);
+
+    const created = await prisma.$transaction(async (tx) => {
+      const salesReturn = await tx.salesReturn.create({
+        data: {
+          organizationId: context.organization.id,
+          salesOrderId: order.id,
+          code,
+          reason: parsed.reason || null,
+          status: "DRAFT",
+          lines: {
+            create: parsed.lines.map((line) => ({
+              productId: line.productId,
+              quantity: line.quantity,
+            })),
+          },
+        },
+        include: { lines: true },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: context.organization.id,
+          actorId: context.user.id,
+          action: "CREATE",
+          entityType: "SalesReturn",
+          entityId: salesReturn.id,
+          summary: `${code} return created (order: ${order.code})`,
+        },
+      });
+
+      return salesReturn;
+    });
+
+    return {
+      id: created.id,
+      organizationId: created.organizationId,
+      salesOrderId: created.salesOrderId,
+      code: created.code,
+      reason: created.reason ?? undefined,
+      status: created.status,
+      createdAt: created.createdAt.toISOString(),
+      lines: created.lines.map((line) => ({
+        productId: line.productId,
+        quantity: line.quantity,
+        restocked: line.restocked,
+      })),
+    };
+  }
+
+  async approveSalesReturn(returnId: string, context: AuthContext) {
+    if (!dbMode()) {
+      throw new BadRequestException(
+        "Sales returns require database mode.",
+      );
+    }
+
+    const prisma = getPrisma();
+
+    await prisma.$transaction(async (tx) => {
+      const salesReturn = await tx.salesReturn.findFirst({
+        where: {
+          id: returnId,
+          organizationId: context.organization.id,
+          status: "DRAFT",
+        },
+        include: { lines: true, salesOrder: true },
+      });
+
+      if (!salesReturn) {
+        throw new NotFoundException(
+          "Sales return not found or already processed.",
+        );
+      }
+
+      const warehouse = await tx.warehouse.findFirst({
+        where: {
+          organizationId: context.organization.id,
+          isDefault: true,
+        },
+      });
+
+      if (!warehouse) {
+        throw new NotFoundException("Default warehouse not found.");
+      }
+
+      await tx.stockMovement.createMany({
+        data: salesReturn.lines.map((line) => ({
+          organizationId: context.organization.id,
+          warehouseId: warehouse.id,
+          productId: line.productId,
+          type: "INBOUND" as const,
+          quantityChange: line.quantity,
+          reference: salesReturn.code,
+          note: `Return for ${salesReturn.salesOrder.code}`,
+          createdById: context.user.id,
+        })),
+      });
+
+      await Promise.all(
+        salesReturn.lines.map((line) =>
+          tx.salesReturnLine.update({
+            where: { id: line.id },
+            data: { restocked: true },
+          }),
+        ),
+      );
+
+      await tx.salesReturn.update({
+        where: { id: salesReturn.id },
+        data: { status: "COMPLETED" },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: context.organization.id,
+          actorId: context.user.id,
+          action: "CONFIRM",
+          entityType: "SalesReturn",
+          entityId: salesReturn.id,
+          summary: `${salesReturn.code} approved, stock reinstated`,
+        },
+      });
+    });
+
+    return (await this.listSalesReturns(context)).find(
+      (item) => item.id === returnId,
+    );
   }
 
   private async listDatabaseProducts(context: AuthContext): Promise<Product[]> {

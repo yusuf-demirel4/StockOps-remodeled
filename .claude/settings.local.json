@@ -9,7 +9,12 @@
       "Bash(npm install:*)",
       "Bash(npx vitest:*)",
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+<<<<<<< HEAD
       "Bash(xargs grep:*)"
+=======
+      "Bash(npm test *)",
+      "Bash(npx --workspace @stockops/api tsc --noEmit)"
+>>>>>>> 655e0b5806713545a061efb6e8a5608c61013b39
     ]
   },
   "enabledPlugins": {

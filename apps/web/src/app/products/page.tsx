@@ -5,6 +5,7 @@ import {
   ProductUpdateDisclosure,
 } from "@/components/product-forms";
 import { Panel, StatusBadge } from "@/components/ui";
+import { VariantManager } from "@/components/variant-forms";
 import { requireAuth } from "@/lib/auth";
 import { getAppSnapshot } from "@/lib/repository";
 import { numberFormatter } from "@stockops/core/format";
@@ -68,6 +69,10 @@ export default async function ProductsPage() {
                       <div className="flex flex-wrap items-start gap-2">
                         <ProductUpdateDisclosure product={product} />
                         <ProductStatusForm product={product} />
+                        <VariantManager
+                          product={product}
+                          variants={snapshot.productVariants}
+                        />
                       </div>
                     </td>
                   </tr>
