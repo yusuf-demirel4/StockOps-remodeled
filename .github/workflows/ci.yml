@@ -66,6 +66,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Apply database migrations
+        run: npm run prisma:migrate:deploy
+
+      - name: Seed database
+        run: npm run prisma:seed
+        env:
+          API_DEMO_TOKEN: stockops_demo_api_key
+
       - name: Database smoke test
         run: npm run smoke:database
         env:
