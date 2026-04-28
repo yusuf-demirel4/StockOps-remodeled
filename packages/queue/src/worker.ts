@@ -3,13 +3,13 @@ import type {
   JobPayloadByName,
   QueueJob,
 } from "@stockops/core/jobs";
-import { Worker, type Job, type WorkerOptions } from "bullmq";
 
 import {
   resolveQueueConfig,
   type QueueDriver,
   type QueueRuntimeConfig,
 } from "./config";
+import { Worker, type Job, type WorkerOptions } from "./bullmq";
 
 type AnyJobPayload = JobPayloadByName[JobName];
 

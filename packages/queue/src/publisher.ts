@@ -3,13 +3,13 @@ import type {
   JobPayloadByName,
   QueueJob,
 } from "@stockops/core/jobs";
-import { Queue } from "bullmq";
 
 import {
   resolveQueueConfig,
   type QueueDriver,
   type QueueRuntimeConfig,
 } from "./config";
+import { Queue, type QueueInstance } from "./bullmq";
 
 type AnyJobPayload = JobPayloadByName[JobName];
 
@@ -38,7 +38,7 @@ const globalForMemoryQueue = globalThis as typeof globalThis & {
 
 export class StockOpsQueuePublisher {
   private readonly driver: QueueDriver;
-  private readonly queue?: Queue;
+  private readonly queue?: QueueInstance;
   private readonly queueName: string;
 
   constructor(config: QueueRuntimeConfig = {}) {
