@@ -29,10 +29,23 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      postgres-shadow:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: stockops_shadow
+          POSTGRES_USER: stockops
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U stockops -d stockops_shadow"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     env:
       DATABASE_URL: postgresql://stockops:test@localhost:5432/stockops_test
-      SHADOW_DATABASE_URL: postgresql://stockops:test@localhost:5432/stockops_test
+      SHADOW_DATABASE_URL: postgresql://stockops:test@localhost:5433/stockops_shadow
       APP_DATA_SOURCE: demo
       API_PORT: 4000
       API_CORS_ORIGIN: http://localhost:3000
