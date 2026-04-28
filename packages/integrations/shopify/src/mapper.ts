@@ -2,6 +2,7 @@ import type { Product, SalesOrder, StockMovement } from "@stockops/core/types";
 import type {
   ShopifyLineItem,
   ShopifyOrder,
+  ShopifyRefund,
   ShopifyProduct,
   ShopifyVariant,
 } from "./types";
@@ -42,11 +43,12 @@ export function shopifyOrderToSalesOrder(
   organizationId: string,
   orderCode: string,
 ): Omit<SalesOrder, "id"> {
-  const customerName = shopifyOrder.customer
-    ? `${shopifyOrder.customer.firstName} ${shopifyOrder.customer.lastName}`.trim()
-    : shopifyOrder.email || `Shopify ${shopifyOrder.name}`;
+  const normalizedOrder = normalizeShopifyOrder(shopifyOrder);
+  const customerName = normalizedOrder.customer
+    ? `${normalizedOrder.customer.firstName} ${normalizedOrder.customer.lastName}`.trim()
+    : normalizedOrder.email || `Shopify ${normalizedOrder.name}`;
 
-  const lines = shopifyOrder.lineItems
+  const lines = normalizedOrder.lineItems
     .filter((item) => item.sku && productsMap.has(item.sku))
     .map((item) => ({
       productId: productsMap.get(item.sku)!.id,
@@ -57,9 +59,9 @@ export function shopifyOrderToSalesOrder(
     organizationId,
     code: orderCode,
     customerName,
-    status: shopifyOrder.cancelledAt ? "CANCELLED" : "DRAFT",
+    status: normalizedOrder.cancelledAt ? "CANCELLED" : "DRAFT",
     lines,
-    createdAt: shopifyOrder.createdAt,
+    createdAt: normalizedOrder.createdAt,
   };
 }
 
@@ -74,13 +76,14 @@ export function shopifyRefundToStockMovements(
   organizationId: string,
   userId: string,
 ): Omit<StockMovement, "id">[] {
+  const normalizedOrder = normalizeShopifyOrder(shopifyOrder);
   const movements: Omit<StockMovement, "id">[] = [];
 
-  for (const refund of shopifyOrder.refunds) {
+  for (const refund of normalizedOrder.refunds) {
     for (const refundLine of refund.refundLineItems) {
       if (refundLine.restockType !== "return") continue;
 
-      const lineItem = shopifyOrder.lineItems.find(
+      const lineItem = normalizedOrder.lineItems.find(
         (li) => li.id === refundLine.lineItemId,
       );
       if (!lineItem?.sku) continue;
@@ -169,14 +172,19 @@ export function validateOrderPayload(payload: unknown): payload is ShopifyOrder 
   if (!payload || typeof payload !== "object") return false;
 
   const order = payload as Record<string, unknown>;
+  const lineItems = Array.isArray(order.line_items)
+    ? order.line_items
+    : Array.isArray(order.lineItems)
+      ? order.lineItems
+      : null;
 
   if (!order.id || !order.name) return false;
 
-  if (!Array.isArray(order.line_items) || order.line_items.length === 0) {
+  if (!lineItems || lineItems.length === 0) {
     return false;
   }
 
-  for (const item of order.line_items) {
+  for (const item of lineItems) {
     if (typeof item !== "object" || !item) return false;
     if (!item.quantity || item.quantity <= 0) return false;
   }
@@ -192,4 +200,131 @@ export function validateProductPayload(payload: unknown): payload is ShopifyProd
 
   const product = payload as Record<string, unknown>;
   return Boolean(product.id && product.title);
+}
+
+type ShopifyOrderLike = Record<string, unknown> & {
+  cancelledAt?: string | null;
+  cancelled_at?: string | null;
+  createdAt?: string;
+  created_at?: string;
+  customer?: unknown;
+  email?: string;
+  currency?: string;
+  financialStatus?: string;
+  financial_status?: string;
+  fulfillmentStatus?: string | null;
+  fulfillment_status?: string | null;
+  lineItems?: unknown[];
+  line_items?: unknown[];
+  refunds?: unknown[];
+  totalPrice?: string;
+  total_price?: string;
+  updatedAt?: string;
+  updated_at?: string;
+};
+
+function normalizeShopifyOrder(order: ShopifyOrder | ShopifyOrderLike): ShopifyOrder {
+  const rawOrder = order as ShopifyOrderLike;
+  const normalizedLineItems = normalizeShopifyLineItems(rawOrder.lineItems ?? rawOrder.line_items);
+  const normalizedRefunds = normalizeShopifyRefunds(rawOrder.refunds);
+
+  return {
+    id: String(rawOrder.id ?? ""),
+    name: String(rawOrder.name ?? ""),
+    email: String(rawOrder.email ?? ""),
+    createdAt: String(rawOrder.createdAt ?? rawOrder.created_at ?? ""),
+    updatedAt: String(
+      rawOrder.updatedAt ?? rawOrder.updated_at ?? rawOrder.createdAt ?? rawOrder.created_at ?? "",
+    ),
+    cancelledAt: (rawOrder.cancelledAt ?? rawOrder.cancelled_at ?? null) as string | null,
+    financialStatus: String(rawOrder.financialStatus ?? rawOrder.financial_status ?? ""),
+    fulfillmentStatus: (rawOrder.fulfillmentStatus ?? rawOrder.fulfillment_status ?? null) as string | null,
+    totalPrice: String(rawOrder.totalPrice ?? rawOrder.total_price ?? "0"),
+    currency: String(rawOrder.currency ?? ""),
+    customer: normalizeShopifyCustomer(rawOrder.customer),
+    lineItems: normalizedLineItems,
+    refunds: normalizedRefunds,
+  };
+}
+
+function normalizeShopifyCustomer(customer: unknown): ShopifyOrder["customer"] {
+  if (!customer || typeof customer !== "object") {
+    return null;
+  }
+
+  const value = customer as Record<string, unknown>;
+
+  return {
+    id: String(value.id ?? ""),
+    firstName: String(value.firstName ?? value.first_name ?? ""),
+    lastName: String(value.lastName ?? value.last_name ?? ""),
+    email: String(value.email ?? ""),
+  };
+}
+
+function normalizeShopifyLineItems(lineItems: unknown): ShopifyLineItem[] {
+  if (!Array.isArray(lineItems)) {
+    return [];
+  }
+
+  return lineItems.map((item) => normalizeShopifyLineItem(item));
+}
+
+function normalizeShopifyLineItem(item: unknown): ShopifyLineItem {
+  const value = item as Record<string, unknown>;
+
+  return {
+    id: String(value.id ?? ""),
+    title: String(value.title ?? ""),
+    sku: String(value.sku ?? ""),
+    quantity: Number(value.quantity ?? 0),
+    price: String(value.price ?? "0"),
+    variantId:
+      value.variantId !== undefined && value.variantId !== null
+        ? String(value.variantId)
+        : value.variant_id !== undefined && value.variant_id !== null
+          ? String(value.variant_id)
+          : null,
+    productId:
+      value.productId !== undefined && value.productId !== null
+        ? String(value.productId)
+        : value.product_id !== undefined && value.product_id !== null
+          ? String(value.product_id)
+          : null,
+  };
+}
+
+function normalizeShopifyRefunds(refunds: unknown): ShopifyRefund[] {
+  if (!Array.isArray(refunds)) {
+    return [];
+  }
+
+  return refunds.map((refund) => normalizeShopifyRefund(refund));
+}
+
+function normalizeShopifyRefund(refund: unknown): ShopifyRefund {
+  const value = refund as Record<string, unknown>;
+  const rawRefundLineItems =
+    value.refundLineItems ?? value.refund_line_items ?? [];
+
+  return {
+    id: String(value.id ?? ""),
+    createdAt: String(value.createdAt ?? value.created_at ?? ""),
+    refundLineItems: Array.isArray(rawRefundLineItems)
+      ? rawRefundLineItems.map((lineItem) => normalizeShopifyRefundLineItem(lineItem))
+      : [],
+  };
+}
+
+function normalizeShopifyRefundLineItem(refundLineItem: unknown): ShopifyRefund["refundLineItems"][number] {
+  const value = refundLineItem as Record<string, unknown>;
+
+  return {
+    lineItemId: String(value.lineItemId ?? value.line_item_id ?? ""),
+    quantity: Number(value.quantity ?? 0),
+    restockType:
+      (value.restockType as ShopifyRefund["refundLineItems"][number]["restockType"] | undefined) ??
+      (value.restock_type as ShopifyRefund["refundLineItems"][number]["restockType"] | undefined) ??
+      "no_restock",
+  };
 }
