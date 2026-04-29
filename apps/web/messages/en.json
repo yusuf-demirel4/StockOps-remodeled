@@ -1,0 +1,17 @@
+{
+  "App": {
+    "name": "StockOps",
+    "description": "Inventory operations management system"
+  },
+  "Settings": {
+    "business": "Business",
+    "locale": "Language",
+    "currency": "Default currency"
+  },
+  "Mobile": {
+    "home": "Mobile home",
+    "receive": "Receive",
+    "pick": "Pick",
+    "stocktake": "Stocktake"
+  }
+}

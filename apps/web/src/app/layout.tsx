@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
 import type { ThemeMode } from "@/lib/theme";
 import { THEME_COOKIE } from "@/lib/theme";
@@ -41,6 +43,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
+  const locale = await getLocale();
+  const messages = await getMessages();
   const themeCookie = cookieStore.get(THEME_COOKIE)?.value;
   const mode: ThemeMode =
     themeCookie === "light" || themeCookie === "dark" || themeCookie === "system"
@@ -52,7 +56,7 @@ export default async function RootLayout({
 
   return (
     <html
-      lang="tr"
+      lang={locale}
       data-theme={resolved}
       className={`${geistSans.variable} ${geistMono.variable} h-full`}
     >
@@ -60,7 +64,9 @@ export default async function RootLayout({
         className="min-h-full flex flex-col antialiased"
         suppressHydrationWarning
       >
-        <ThemeProvider initialMode={mode}>{children}</ThemeProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <ThemeProvider initialMode={mode}>{children}</ThemeProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

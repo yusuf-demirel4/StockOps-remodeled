@@ -101,6 +101,8 @@ export class ApiAuthService {
         id: apiToken.organization.id,
         name: apiToken.organization.name,
         slug: apiToken.organization.slug,
+        defaultCurrency: apiToken.organization.defaultCurrency,
+        locale: apiToken.organization.locale,
       },
       role: membership.role as Role,
       sessionToken: token,

@@ -17,6 +17,24 @@ const optionalBoolean = z.preprocess((value) => {
   return value;
 }, z.boolean().optional());
 
+export const supportedCurrencySchema = z.enum([
+  "TRY",
+  "USD",
+  "EUR",
+  "GBP",
+  "CHF",
+  "CAD",
+  "AUD",
+  "JPY",
+]);
+
+export const supportedLocaleSchema = z.enum(["tr", "en"]);
+
+export const organizationSettingsInputSchema = z.object({
+  defaultCurrency: supportedCurrencySchema,
+  locale: supportedLocaleSchema,
+});
+
 export const productInputSchema = z.object({
   sku: z.string().trim().min(2),
   name: z.string().trim().min(2),
@@ -35,6 +53,13 @@ export const stockMovementInputSchema = z.object({
   warehouseId: z.string().min(1),
   type: z.enum(["INBOUND", "OUTBOUND", "ADJUSTMENT"]),
   quantity: positiveInt,
+  note: z.string().trim().optional(),
+});
+
+export const stocktakeCountInputSchema = z.object({
+  productId: z.string().min(1),
+  warehouseId: z.string().min(1),
+  countedQuantity: z.coerce.number().int().min(0),
   note: z.string().trim().optional(),
 });
 
@@ -128,6 +153,12 @@ export const invoiceInputSchema = z.object({
   ).min(1),
 });
 
+export const exchangeRateQuerySchema = z.object({
+  baseCurrency: supportedCurrencySchema.default("EUR"),
+  quoteCurrency: supportedCurrencySchema.default("TRY"),
+  provider: z.enum(["ECB", "TCMB"]).optional(),
+});
+
 export const webhookSourceSchema = z.enum(["SHOPIFY", "WOOCOMMERCE"]);
 export const webhookEventStatusSchema = z.enum([
   "PENDING",
@@ -143,6 +174,41 @@ export const notificationDeliveryStatusSchema = z.enum([
   "FAILED",
   "SKIPPED",
 ]);
+
+export const extensionEventNameSchema = z.enum([
+  "order.created",
+  "order.updated",
+  "stock.changed",
+  "invoice.issued",
+  "product.updated",
+  "purchase.received",
+]);
+
+export const webhookSubscriptionInputSchema = z.object({
+  url: z.string().trim().url(),
+  events: z.array(extensionEventNameSchema).min(1),
+  secret: z.string().trim().min(12).optional().or(z.literal("")),
+});
+
+export const webhookSubscriptionUpdateSchema = z.object({
+  url: z.string().trim().url().optional(),
+  events: z.array(extensionEventNameSchema).min(1).optional(),
+  secret: z.string().trim().min(12).optional().or(z.literal("")),
+  status: z.enum(["ACTIVE", "PAUSED"]).optional(),
+}).refine(
+  (value) => Object.keys(value).length > 0,
+  "At least one field is required.",
+);
+
+export const customFieldInputSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z][a-zA-Z0-9_.-]*$/),
+  value: z.unknown(),
+});
 
 export const variantInputSchema = z.object({
   productId: z.string().min(1),

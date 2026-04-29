@@ -10,6 +10,10 @@ const SHELL_CACHE = `stockops-shell-${CACHE_VERSION}`;
 const OFFLINE_URL = "/mobile/offline";
 
 const PRECACHE_URLS = [
+  "/mobile",
+  "/mobile/receive",
+  "/mobile/pick",
+  "/mobile/stocktake",
   OFFLINE_URL,
   "/manifest.webmanifest",
   "/icons/icon-192.svg",

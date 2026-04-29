@@ -84,6 +84,7 @@ enum AuditAction {
   PICK
   PACK
   SHIP
+  STOCKTAKE
 }
 
 enum WebhookSource {
@@ -141,15 +142,30 @@ enum SyncStatus {
   CONFLICT
 }
 
+enum ExtensionWebhookStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum ExchangeRateProvider {
+  ECB
+  TCMB
+  MANUAL
+}
+
 model Organization {
   id                     String                 @id @default(cuid())
   name                   String
   slug                   String                 @unique
+  defaultCurrency        String                 @default("TRY")
+  locale                 String                 @default("tr")
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
   apiTokens              ApiToken[]
   auditLogs              AuditLog[]
+  customFields           CustomField[]
   customers              Customer[]
+  exchangeRates          ExchangeRate[]
   invoices               Invoice[]
   memberships            Membership[]
   accountingConnections  AccountingConnection[]
@@ -165,6 +181,7 @@ model Organization {
   shipments              Shipment[]
   pickLists              PickList[]
   webhookEvents          WebhookEvent[]
+  webhookSubscriptions   ExtensionWebhookSubscription[]
   warehouses             Warehouse[]
   billsOfMaterial        BillOfMaterial[]
   manufacturingOrders    ManufacturingOrder[]
@@ -172,6 +189,50 @@ model Organization {
   branding               OrganizationBranding?
   savedReports           SavedReport[]
   scheduledReports       ScheduledReport[]
+}
+
+model ExtensionWebhookSubscription {
+  id             String                 @id @default(cuid())
+  organizationId String
+  url            String
+  events         Json
+  secret         String?
+  status         ExtensionWebhookStatus @default(ACTIVE)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+}
+
+model CustomField {
+  id             String       @id @default(cuid())
+  organizationId String
+  entityType     String
+  entityId       String
+  key            String
+  value          Json
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, entityType, entityId, key])
+  @@index([organizationId, entityType, entityId])
+}
+
+model ExchangeRate {
+  id             String               @id @default(cuid())
+  organizationId String
+  baseCurrency   String
+  quoteCurrency  String
+  rate           Decimal              @db.Decimal(18, 8)
+  provider       ExchangeRateProvider
+  observedAt     DateTime
+  createdAt      DateTime             @default(now())
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider, baseCurrency, quoteCurrency, observedAt])
+  @@index([organizationId, baseCurrency, quoteCurrency, observedAt])
 }
 
 model User {
