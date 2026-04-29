@@ -63,7 +63,7 @@ export default async function StatusPage() {
         </div>
       ) : (
         <>
-          <div className="mb-6 rounded-lg border bg-white p-6 text-center shadow-sm">
+          <div className="mb-6 rounded-lg border bg-[var(--bg-card)] p-6 text-center shadow-sm">
             <StatusBadge status={data.overall} />
             <p className="mt-2 text-sm text-gray-500">
               Last updated: {new Date(data.updatedAt).toLocaleString()}
@@ -72,7 +72,7 @@ export default async function StatusPage() {
 
           <div className="space-y-3">
             {data.services.map((service) => (
-              <div key={service.name} className="flex items-center justify-between rounded-lg border bg-white px-4 py-3 shadow-sm">
+              <div key={service.name} className="flex items-center justify-between rounded-lg border bg-[var(--bg-card)] px-4 py-3 shadow-sm">
                 <div>
                   <p className="font-medium text-gray-900">{service.name}</p>
                   {service.latencyMs != null && (

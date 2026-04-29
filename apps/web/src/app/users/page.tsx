@@ -45,8 +45,8 @@ export default async function UsersPage() {
         <Panel title="Kullanıcı listesi">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px] text-left text-sm">
-              <thead className="text-xs uppercase text-[#6a746f]">
-                <tr className="border-b border-[#e3e5dd]">
+              <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                <tr className="border-b border-[var(--border-subtle)]">
                   <th className="py-2 pr-3">Ad</th>
                   <th className="py-2 pr-3">E-posta</th>
                   <th className="py-2 pr-3">Rol</th>
@@ -58,13 +58,13 @@ export default async function UsersPage() {
               <tbody>
                 {snapshot.members.map((member) => (
                   <tr
-                    className="border-b border-[#eef0ea] align-top last:border-0"
+                    className="border-b border-[var(--border-table)] align-top last:border-0"
                     key={member.id}
                   >
                     <td className="py-3 pr-3 font-medium">
                       {member.name}
                       {member.userId === snapshot.user.id && (
-                        <span className="ml-2 text-xs text-[#66706b]">(siz)</span>
+                        <span className="ml-2 text-xs text-[var(--text-secondary)]">(siz)</span>
                       )}
                     </td>
                     <td className="py-3 pr-3">{member.email}</td>

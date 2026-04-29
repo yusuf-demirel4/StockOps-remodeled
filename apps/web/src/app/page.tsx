@@ -117,18 +117,18 @@ export default async function DashboardPage() {
 
           <div className="mt-5">
             <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="font-medium text-[#26302c]">Stok satırı sağlığı</span>
-              <span className="font-mono text-xs text-[#65706b]">
+              <span className="font-medium text-[var(--text-panel-heading)]">Stok satırı sağlığı</span>
+              <span className="font-mono text-xs text-[var(--text-muted)]">
                 %{numberFormatter.format(summary.stockHealthPercent)}
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-[#e4e7df]">
+            <div className="h-2 overflow-hidden rounded-full bg-[var(--progress-bg)]">
               <div
-                className="h-full rounded-full bg-[#236d5a]"
+                className="h-full rounded-full bg-[var(--accent-primary)]"
                 style={{ width: `${summary.stockHealthPercent}%` }}
               />
             </div>
-            <p className="mt-2 text-sm text-[#65706b]">
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
               {numberFormatter.format(summary.criticalStockRowCount)} stok satırı
               minimum seviyede veya altında.
             </p>
@@ -142,7 +142,7 @@ export default async function DashboardPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-medium">{warehouseSummary.warehouse.name}</p>
-                    <p className="mt-1 text-xs text-[#65706b]">
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
                       {numberFormatter.format(
                         warehouseSummary.stockedProductCount,
                       )}{" "}
@@ -155,9 +155,9 @@ export default async function DashboardPage() {
                     {numberFormatter.format(warehouseSummary.onHand)}
                   </span>
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e4e7df]">
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--progress-bg)]">
                   <div
-                    className="h-full rounded-full bg-[#3d7b66]"
+                    className="h-full rounded-full bg-[var(--accent-secondary)]"
                     style={{
                       width: `${Math.max(
                         warehouseSummary.stockSharePercent,
@@ -179,8 +179,8 @@ export default async function DashboardPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="text-xs uppercase text-[#6a746f]">
-                  <tr className="border-b border-[#e3e5dd]">
+                <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                  <tr className="border-b border-[var(--border-subtle)]">
                     <th className="py-2 pr-3">SKU</th>
                     <th className="py-2 pr-3">Ürün</th>
                     <th className="py-2 pr-3">Depo</th>
@@ -192,7 +192,7 @@ export default async function DashboardPage() {
                 <tbody>
                   {summary.criticalRows.slice(0, 8).map((row) => (
                     <tr
-                      className="border-b border-[#eef0ea] last:border-0"
+                      className="border-b border-[var(--border-table)] last:border-0"
                       key={`${row.product.id}-${row.warehouse.id}`}
                     >
                       <td className="py-3 pr-3 font-mono text-xs">
@@ -210,7 +210,7 @@ export default async function DashboardPage() {
                       <td className="py-3 pr-3">
                         {numberFormatter.format(row.minimumStock)}
                       </td>
-                      <td className="py-3 font-mono font-semibold text-[#a23922]">
+                      <td className="py-3 font-mono font-semibold text-[var(--accent-danger-text2)]">
                         {numberFormatter.format(stockShortage(row))}
                       </td>
                     </tr>
@@ -242,13 +242,13 @@ export default async function DashboardPage() {
 
             {summary.salesOrderReadiness.slice(0, 4).map((item) => (
               <div
-                className="rounded-md border border-[#edf0e8] px-3 py-3"
+                className="rounded-md border border-[var(--border-table)] px-3 py-3"
                 key={item.order.id}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-medium">{item.order.code}</p>
-                    <p className="mt-1 text-sm text-[#65706b]">
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">
                       {item.order.customerName} ·{" "}
                       {formatOrderLines(snapshot.products, item.order)}
                     </p>
@@ -257,7 +257,7 @@ export default async function DashboardPage() {
                     {item.isReady ? "Hazır" : "Stok blokeli"}
                   </StatusBadge>
                 </div>
-                <p className="mt-2 text-xs text-[#65706b]">
+                <p className="mt-2 text-xs text-[var(--text-muted)]">
                   {salesStatusLabel(item.order.status)} ·{" "}
                   {numberFormatter.format(item.units)} birim
                 </p>
@@ -266,13 +266,13 @@ export default async function DashboardPage() {
 
             {snapshot.openPurchaseOrders.slice(0, 4).map((order) => (
               <div
-                className="rounded-md border border-[#edf0e8] px-3 py-3"
+                className="rounded-md border border-[var(--border-table)] px-3 py-3"
                 key={order.id}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-medium">{order.code}</p>
-                    <p className="mt-1 text-sm text-[#65706b]">
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">
                       {supplierName(snapshot.suppliers, order.supplierId)}
                     </p>
                   </div>
@@ -280,7 +280,7 @@ export default async function DashboardPage() {
                     {purchaseStatusLabel(order.status)}
                   </StatusBadge>
                 </div>
-                <p className="mt-2 text-xs text-[#65706b]">
+                <p className="mt-2 text-xs text-[var(--text-muted)]">
                   {numberFormatter.format(remainingPurchaseUnits(order))} birim
                   teslim bekliyor
                   {order.expectedDate ? ` · ${order.expectedDate}` : ""}
@@ -290,13 +290,13 @@ export default async function DashboardPage() {
 
             {purchaseRecommendations.slice(0, 4).map((recommendation) => (
               <div
-                className="rounded-md border border-[#edf0e8] px-3 py-3"
+                className="rounded-md border border-[var(--border-table)] px-3 py-3"
                 key={recommendation.product.id}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-medium">{recommendation.product.sku}</p>
-                    <p className="mt-1 text-sm text-[#65706b]">
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">
                       {recommendation.product.name} ·{" "}
                       {recommendation.supplier?.name ?? "Tedarikçi seçilmedi"}
                     </p>
@@ -311,7 +311,7 @@ export default async function DashboardPage() {
                     Öneri
                   </StatusBadge>
                 </div>
-                <p className="mt-2 text-xs text-[#65706b]">
+                <p className="mt-2 text-xs text-[var(--text-muted)]">
                   {numberFormatter.format(recommendation.suggestedQuantity)} birim
                   öneriliyor · projeksiyon{" "}
                   {numberFormatter.format(recommendation.projectedAvailable)}
@@ -330,15 +330,15 @@ export default async function DashboardPage() {
             <div className="space-y-3">
               {purchaseRecommendations.slice(0, 6).map((recommendation) => (
                 <div
-                  className="flex items-start justify-between gap-4 border-b border-[#eef0ea] pb-3 last:border-0 last:pb-0"
+                  className="flex items-start justify-between gap-4 border-b border-[var(--border-table)] pb-3 last:border-0 last:pb-0"
                   key={recommendation.product.id}
                 >
                   <div>
                     <p className="font-medium">{recommendation.product.name}</p>
-                    <p className="mt-1 font-mono text-xs text-[#65706b]">
+                    <p className="mt-1 font-mono text-xs text-[var(--text-muted)]">
                       {recommendation.product.sku}
                     </p>
-                    <p className="mt-2 text-xs text-[#65706b]">
+                    <p className="mt-2 text-xs text-[var(--text-muted)]">
                       Elde {numberFormatter.format(recommendation.onHand)} · açık
                       satış{" "}
                       {numberFormatter.format(recommendation.openSalesDemand)} ·
@@ -357,7 +357,7 @@ export default async function DashboardPage() {
                       <ShoppingCart aria-hidden="true" className="mr-1 size-3" />
                       {numberFormatter.format(recommendation.suggestedQuantity)}
                     </StatusBadge>
-                    <p className="mt-2 text-xs text-[#65706b]">
+                    <p className="mt-2 text-xs text-[var(--text-muted)]">
                       {recommendation.supplier?.leadTimeDays
                         ? `${recommendation.supplier.leadTimeDays} gün`
                         : "Tedarikçi yok"}
@@ -376,12 +376,12 @@ export default async function DashboardPage() {
             <div className="space-y-3">
               {summary.topMovingProducts.map((item) => (
                 <div
-                  className="flex items-center justify-between gap-4 border-b border-[#eef0ea] pb-3 last:border-0 last:pb-0"
+                  className="flex items-center justify-between gap-4 border-b border-[var(--border-table)] pb-3 last:border-0 last:pb-0"
                   key={item.product.id}
                 >
                   <div>
                     <p className="font-medium">{item.product.name}</p>
-                    <p className="mt-1 font-mono text-xs text-[#65706b]">
+                    <p className="mt-1 font-mono text-xs text-[var(--text-muted)]">
                       {item.product.sku}
                     </p>
                   </div>
@@ -389,7 +389,7 @@ export default async function DashboardPage() {
                     <p className="font-mono text-sm font-semibold">
                       {numberFormatter.format(item.movedUnits)}
                     </p>
-                    <p className="mt-1 text-xs text-[#65706b]">
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
                       net {formatSignedQuantity(item.netChange)}
                     </p>
                   </div>
@@ -405,8 +405,8 @@ export default async function DashboardPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[780px] text-left text-sm">
-                <thead className="text-xs uppercase text-[#6a746f]">
-                  <tr className="border-b border-[#e3e5dd]">
+                <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                  <tr className="border-b border-[var(--border-subtle)]">
                     <th className="py-2 pr-3">Tarih</th>
                     <th className="py-2 pr-3">Tip</th>
                     <th className="py-2 pr-3">Ürün</th>
@@ -417,10 +417,10 @@ export default async function DashboardPage() {
                 <tbody>
                   {snapshot.stockMovements.slice(0, 8).map((movement) => (
                     <tr
-                      className="border-b border-[#eef0ea] last:border-0"
+                      className="border-b border-[var(--border-table)] last:border-0"
                       key={movement.id}
                     >
-                      <td className="py-3 pr-3 text-[#65706b]">
+                      <td className="py-3 pr-3 text-[var(--text-muted)]">
                         {formatDate(movement.createdAt)}
                       </td>
                       <td className="py-3 pr-3">
@@ -430,7 +430,7 @@ export default async function DashboardPage() {
                         <span className="font-medium">
                           {productName(snapshot.products, movement.productId)}
                         </span>
-                        <span className="mt-1 block font-mono text-xs text-[#65706b]">
+                        <span className="mt-1 block font-mono text-xs text-[var(--text-muted)]">
                           {productSku(snapshot.products, movement.productId)}
                         </span>
                       </td>
@@ -457,15 +457,15 @@ export default async function DashboardPage() {
             <div className="grid gap-3 md:grid-cols-2">
               {snapshot.auditLogs.slice(0, 6).map((auditLog) => (
                 <div
-                  className="flex items-start gap-3 rounded-md border border-[#edf0e8] px-3 py-3"
+                  className="flex items-start gap-3 rounded-md border border-[var(--border-table)] px-3 py-3"
                   key={auditLog.id}
                 >
-                  <span className="mt-0.5 rounded-md bg-[#e9eef0] p-2 text-[#3b5f6f]">
+                  <span className="mt-0.5 rounded-md bg-[var(--accent-info-bg)] p-2 text-[var(--accent-info-text)]">
                     <Activity aria-hidden="true" className="size-4" />
                   </span>
                   <div>
                     <p className="font-medium">{auditLog.summary}</p>
-                    <p className="mt-1 text-xs text-[#65706b]">
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
                       {auditLog.entityType} · {formatDate(auditLog.createdAt)}
                     </p>
                   </div>
@@ -491,17 +491,17 @@ function SummaryMetric({
   tone?: "neutral" | "warning" | "danger";
 }) {
   return (
-    <div className="rounded-md border border-[#edf0e8] bg-[#fafbf7] px-3 py-3">
+    <div className="rounded-md border border-[var(--border-table)] bg-[var(--bg-empty)] px-3 py-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-[#65706b]">{caption}</span>
+        <span className="text-sm text-[var(--text-muted)]">{caption}</span>
         <Icon
           aria-hidden="true"
           className={
             tone === "danger"
-              ? "size-4 text-[#a23922]"
+              ? "size-4 text-[var(--accent-danger-text2)]"
               : tone === "warning"
-                ? "size-4 text-[#866100]"
-                : "size-4 text-[#3d7b66]"
+                ? "size-4 text-[var(--accent-warning-text2)]"
+                : "size-4 text-[var(--accent-secondary)]"
           }
         />
       </div>

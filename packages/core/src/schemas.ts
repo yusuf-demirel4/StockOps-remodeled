@@ -205,3 +205,78 @@ export const signInInputSchema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(8),
 });
+
+// ── BOM + Manufacturing ──
+
+export const bomComponentInputSchema = z.object({
+  componentProductId: z.string().min(1),
+  quantity: z.coerce.number().positive(),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+});
+
+export const bomInputSchema = z.object({
+  productId: z.string().min(1),
+  name: z.string().trim().min(2),
+  description: z.string().trim().optional(),
+  components: z.array(bomComponentInputSchema).min(1),
+});
+
+export const bomUpdateInputSchema = z.object({
+  name: z.string().trim().min(2).optional(),
+  description: z.string().trim().optional(),
+  components: z.array(bomComponentInputSchema).min(1).optional(),
+});
+
+export const manufacturingOrderInputSchema = z.object({
+  bomId: z.string().min(1),
+  warehouseId: z.string().min(1),
+  quantity: z.coerce.number().int().positive(),
+});
+
+// ── B2B Portal ──
+
+export const customerUserInputSchema = z.object({
+  customerId: z.string().min(1),
+  name: z.string().trim().min(2),
+  email: z.string().trim().email(),
+  password: z.string().min(8),
+});
+
+export const customerPriceTierInputSchema = z.object({
+  customerId: z.string().min(1),
+  productId: z.string().min(1),
+  tierPrice: z.coerce.number().min(0),
+  minQuantity: z.coerce.number().int().positive().default(1),
+});
+
+export const portalOrderInputSchema = z.object({
+  lines: z
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        quantity: z.coerce.number().int().positive(),
+      }),
+    )
+    .min(1),
+  notes: z.string().trim().optional(),
+});
+
+export const portalSignInSchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(8),
+});
+
+export const brandingInputSchema = z.object({
+  logoUrl: z.string().url().optional().or(z.literal("")),
+  primaryColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional()
+    .or(z.literal("")),
+  accentColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional()
+    .or(z.literal("")),
+  portalDomain: z.string().trim().optional(),
+});

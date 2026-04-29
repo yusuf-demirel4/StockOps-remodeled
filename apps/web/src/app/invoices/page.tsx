@@ -50,8 +50,8 @@ export default async function InvoicesPage() {
         <Panel title="Fatura listesi">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-left text-sm">
-              <thead className="text-xs uppercase text-[#6a746f]">
-                <tr className="border-b border-[#e3e5dd]">
+              <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                <tr className="border-b border-[var(--border-subtle)]">
                   <th className="py-2 pr-3">Fatura No</th>
                   <th className="py-2 pr-3">Tarih</th>
                   <th className="py-2 pr-3">Durum</th>
@@ -69,13 +69,13 @@ export default async function InvoicesPage() {
                 ) : (
                   invoices.map((invoice) => (
                     <tr
-                      className="border-b border-[#eef0ea] align-top last:border-0"
+                      className="border-b border-[var(--border-table)] align-top last:border-0"
                       key={invoice.id}
                     >
                       <td className="py-3 pr-3 font-medium">{invoice.code}</td>
                       <td className="py-3 pr-3">{new Date(invoice.createdAt).toLocaleDateString("tr-TR")}</td>
                       <td className="py-3 pr-3">
-                        <span className="rounded bg-[#edf1e8] px-2 py-1 text-xs font-medium text-[#42504a]">
+                        <span className="rounded bg-[var(--bg-hover-nav)] px-2 py-1 text-xs font-medium text-[var(--text-nav)]">
                           {invoice.status}
                         </span>
                       </td>

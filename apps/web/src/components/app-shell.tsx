@@ -3,26 +3,33 @@ import {
   BarChart3,
   Boxes,
   ClipboardList,
+  Factory,
+  FileBarChart,
   FileText,
   LogOut,
   Package,
   Settings,
   Shield,
+  TrendingUp,
   Truck,
   Users,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { signOutAction } from "@/lib/actions";
 import type { Role } from "@stockops/core/types";
+import { ThemeSwitcher } from "./theme-switcher";
 
 const navigation = [
   { href: "/", label: "Dashboard", icon: BarChart3 },
   { href: "/products", label: "Ürünler", icon: Package },
   { href: "/inventory", label: "Stok", icon: Boxes },
+  { href: "/manufacturing", label: "Üretim", icon: Factory },
   { href: "/customers", label: "Müşteriler", icon: Users },
   { href: "/orders", label: "Siparişler", icon: ClipboardList },
   { href: "/invoices", label: "Faturalar", icon: FileText },
   { href: "/suppliers", label: "Tedarikçiler", icon: Truck },
+  { href: "/analytics", label: "Analitik", icon: TrendingUp },
+  { href: "/reports", label: "Raporlar", icon: FileBarChart },
   { href: "/users", label: "Kullanıcılar", icon: Shield },
   { href: "/settings", label: "Ayarlar", icon: Settings },
 ];
@@ -45,25 +52,25 @@ export function AppShell({
   userName,
 }: AppShellProps) {
   return (
-    <div className="min-h-screen bg-[#f7f7f2] text-[#1f2523]">
+    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col lg:flex-row">
-        <aside className="border-b border-[#deded2] bg-[#fbfbf6] lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:border-b-0 lg:border-r">
+        <aside className="border-b border-[var(--border-primary)] bg-[var(--bg-secondary)] lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between gap-4 px-5 py-4 lg:block lg:px-6 lg:py-7">
             <div>
-              <p className="font-mono text-xs uppercase tracking-[0.2em] text-[#66706b]">
+              <p className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-secondary)]">
                 StockOps
               </p>
               <h1 className="mt-2 text-lg font-semibold">{organizationName}</h1>
-              <p className="mt-1 text-sm text-[#66706b]">{userName}</p>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">{userName}</p>
             </div>
             <div className="flex items-center gap-2 lg:mt-4">
-              <span className="rounded-md border border-[#cfd3c8] bg-white px-2.5 py-1 font-mono text-xs text-[#4d5753]">
+              <span className="rounded-md border border-[var(--border-input)] bg-[var(--bg-card)] px-2.5 py-1 font-mono text-xs text-[var(--text-tag)]">
                 {role}
               </span>
               <form action={signOutAction}>
                 <button
                   aria-label="Çıkış yap"
-                  className="inline-flex size-8 items-center justify-center rounded-md border border-[#cfd3c8] bg-white text-[#4d5753] transition hover:bg-[#f1f4ee]"
+                  className="inline-flex size-8 items-center justify-center rounded-md border border-[var(--border-input)] bg-[var(--bg-card)] text-[var(--text-tag)] transition hover:bg-[var(--bg-hover)]"
                   title="Çıkış yap"
                   type="submit"
                 >
@@ -78,7 +85,7 @@ export function AppShell({
 
               return (
                 <Link
-                  className="flex min-w-max items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-[#42504a] transition hover:bg-[#edf1e8] hover:text-[#17211d] lg:min-w-0"
+                  className="flex min-w-max items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-[var(--text-nav)] transition hover:bg-[var(--bg-hover-nav)] hover:text-[var(--text-nav-hover)] lg:min-w-0"
                   href={item.href}
                   key={item.href}
                 >
@@ -88,18 +95,21 @@ export function AppShell({
               );
             })}
           </nav>
+          <div className="hidden border-t border-[var(--border-primary)] px-5 py-4 lg:block">
+            <ThemeSwitcher />
+          </div>
         </aside>
         <main className="flex-1">
-          <header className="border-b border-[#deded2] bg-[#fdfdf8]/90 px-5 py-5 backdrop-blur lg:px-8">
-            <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#65706b]">
+          <header className="border-b border-[var(--border-primary)] bg-[var(--bg-header)] px-5 py-5 backdrop-blur lg:px-8">
+            <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
               Operasyon Paneli
             </p>
             <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
               <div>
-                <h2 className="text-2xl font-semibold tracking-tight text-[#1c2420]">
+                <h2 className="text-2xl font-semibold tracking-tight text-[var(--text-heading)]">
                   {title}
                 </h2>
-                <p className="mt-1 max-w-2xl text-sm text-[#63706a]">
+                <p className="mt-1 max-w-2xl text-sm text-[var(--text-muted)]">
                   {description}
                 </p>
               </div>

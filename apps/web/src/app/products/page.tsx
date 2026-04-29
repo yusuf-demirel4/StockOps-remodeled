@@ -32,8 +32,8 @@ export default async function ProductsPage() {
         <Panel title="Ürün listesi">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[920px] text-left text-sm">
-              <thead className="text-xs uppercase text-[#6a746f]">
-                <tr className="border-b border-[#e3e5dd]">
+              <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                <tr className="border-b border-[var(--border-subtle)]">
                   <th className="py-2 pr-3">SKU</th>
                   <th className="py-2 pr-3">Ürün</th>
                   <th className="py-2 pr-3">Kategori</th>
@@ -46,7 +46,7 @@ export default async function ProductsPage() {
               <tbody>
                 {snapshot.products.map((product) => (
                   <tr
-                    className="border-b border-[#eef0ea] align-top last:border-0"
+                    className="border-b border-[var(--border-table)] align-top last:border-0"
                     key={product.id}
                   >
                     <td className="py-3 pr-3 font-mono text-xs">

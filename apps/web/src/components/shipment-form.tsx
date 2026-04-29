@@ -15,7 +15,7 @@ export function ShipmentForm({ orderId }: { orderId: string }) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="carrier" className="mb-1 block text-sm font-medium text-[#3b4741]">
+              <label htmlFor="carrier" className="mb-1 block text-sm font-medium text-[var(--text-body)]">
                 Kargo Firması
               </label>
               <select id="carrier" name="carrier" className={selectClass} required>
@@ -28,7 +28,7 @@ export function ShipmentForm({ orderId }: { orderId: string }) {
               </select>
             </div>
             <div>
-              <label htmlFor="trackingNumber" className="mb-1 block text-sm font-medium text-[#3b4741]">
+              <label htmlFor="trackingNumber" className="mb-1 block text-sm font-medium text-[var(--text-body)]">
                 Takip No
               </label>
               <input
@@ -44,7 +44,7 @@ export function ShipmentForm({ orderId }: { orderId: string }) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="weight" className="mb-1 block text-sm font-medium text-[#3b4741]">
+              <label htmlFor="weight" className="mb-1 block text-sm font-medium text-[var(--text-body)]">
                 Ağırlık (kg)
               </label>
               <input
@@ -58,7 +58,7 @@ export function ShipmentForm({ orderId }: { orderId: string }) {
               />
             </div>
             <div>
-              <label htmlFor="packageCount" className="mb-1 block text-sm font-medium text-[#3b4741]">
+              <label htmlFor="packageCount" className="mb-1 block text-sm font-medium text-[var(--text-body)]">
                 Paket Sayısı
               </label>
               <input

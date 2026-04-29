@@ -61,22 +61,22 @@ export function PickListForm({
     <div className="space-y-6">
       {/* Progress Bar */}
       <div className="space-y-2">
-        <div className="flex justify-between text-sm font-medium text-[#27322e]">
+        <div className="flex justify-between text-sm font-medium text-[var(--text-body)]">
           <span>Toplama İlerlemesi</span>
           <span>
             {completelyPickedItems} / {totalItems} Kalem ({progressPercent}%)
           </span>
         </div>
-        <div className="h-2.5 w-full overflow-hidden rounded-full bg-[#e3e5dd]">
+        <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--border-subtle)]">
           <div
-            className="h-full bg-[#236d5a] transition-all duration-500 ease-out"
+            className="h-full bg-[var(--accent-primary)] transition-all duration-500 ease-out"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
       </div>
 
       {/* Barcode Scanner */}
-      <div className="rounded-lg border border-[#cfd3c8] bg-[#f9faf7] p-4">
+      <div className="rounded-lg border border-[var(--border-input)] bg-[var(--bg-empty)] p-4">
         {isScanning ? (
           <div className="space-y-4">
             <div className="relative aspect-video w-full overflow-hidden rounded-md bg-black md:aspect-[21/9]">
@@ -87,13 +87,13 @@ export function PickListForm({
                 muted
               />
               <div className="absolute inset-0 border-[40px] border-black/40">
-                <div className="size-full border-2 border-dashed border-[#ffb020]" />
+                <div className="size-full border-2 border-dashed border-[var(--accent-warning-text)]" />
               </div>
             </div>
             <button
               type="button"
               onClick={() => stopCamera(true)}
-              className="w-full rounded-md border border-[#cfd3c8] bg-white px-4 py-2 text-sm font-semibold text-[#27322e] hover:bg-[#f1f4ee]"
+              className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-card)] px-4 py-2 text-sm font-semibold text-[var(--text-body)] hover:bg-[var(--bg-hover)]"
             >
               Kamerayı Kapat
             </button>
@@ -102,14 +102,14 @@ export function PickListForm({
           <button
             type="button"
             onClick={startCamera}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-white px-4 py-3 text-sm font-semibold text-[#236d5a] shadow-sm ring-1 ring-inset ring-[#cfd3c8] hover:bg-[#f9faf7]"
+            className="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--bg-card)] px-4 py-3 text-sm font-semibold text-[var(--accent-primary)] shadow-sm ring-1 ring-inset ring-[var(--border-input)] hover:bg-[var(--bg-empty)]"
           >
             <Camera className="size-5" />
             Barkod Okutarak Bul
           </button>
         )}
         {message ? (
-          <p className="mt-2 text-center text-sm text-[#9a301c]">{message}</p>
+          <p className="mt-2 text-center text-sm text-[var(--accent-danger-text)]">{message}</p>
         ) : null}
       </div>
 
@@ -123,10 +123,10 @@ export function PickListForm({
               key={item.id}
               className={`rounded-lg border p-4 transition-colors ${
                 isComplete
-                  ? "border-[#a3d9b1] bg-[#eef7f1]"
+                  ? "border-[var(--accent-success-text)] bg-[var(--accent-success-bg)]"
                   : activeItemId === item.id
-                    ? "border-[#236d5a] bg-white ring-1 ring-[#236d5a]"
-                    : "border-[#d5d8cf] bg-white"
+                    ? "border-[var(--accent-primary)] bg-[var(--bg-card)] ring-1 ring-[var(--accent-primary)]"
+                    : "border-[var(--border-dashed)] bg-[var(--bg-card)]"
               }`}
             >
               <ActionForm
@@ -142,18 +142,18 @@ export function PickListForm({
                     <div className="flex flex-1 items-start gap-3">
                       <div
                         className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ${
-                          isComplete ? "bg-[#236d5a] text-white" : "bg-[#e3e5dd] text-[#66706b]"
+                          isComplete ? "bg-[var(--accent-primary)] text-white" : "bg-[var(--border-subtle)] text-[var(--text-secondary)]"
                         }`}
                       >
                         {isComplete ? <Check className="size-5" /> : <Box className="size-4" />}
                       </div>
                       <div>
-                        <p className="font-semibold text-[#1f2523]">
+                        <p className="font-semibold text-[var(--text-primary)]">
                           {item.product.sku} — {item.product.name}
                         </p>
-                        <div className="mt-1 flex items-center gap-2 text-sm text-[#66706b]">
+                        <div className="mt-1 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                           {item.binLocation ? (
-                            <span className="rounded-md bg-[#e3e5dd] px-2 py-0.5 text-xs font-medium text-[#3b4741]">
+                            <span className="rounded-md bg-[var(--border-subtle)] px-2 py-0.5 text-xs font-medium text-[var(--text-body)]">
                               Raf: {item.binLocation}
                             </span>
                           ) : null}
@@ -166,8 +166,8 @@ export function PickListForm({
 
                     <div className="flex items-center gap-3">
                       <div className="text-right text-sm">
-                        <span className="block text-[#66706b]">Hedef</span>
-                        <span className="font-semibold text-[#1f2523]">{item.quantity}</span>
+                        <span className="block text-[var(--text-secondary)]">Hedef</span>
+                        <span className="font-semibold text-[var(--text-primary)]">{item.quantity}</span>
                       </div>
                       <div className="text-right">
                         <label htmlFor={`qty-${item.id}`} className="sr-only">
@@ -185,7 +185,7 @@ export function PickListForm({
                           defaultValue={item.pickedQty}
                           onFocus={() => setActiveItemId(item.id)}
                           className={`${inputClass} w-20 text-center font-medium ${
-                            isComplete ? "border-[#a3d9b1] bg-transparent text-[#236d5a]" : ""
+                            isComplete ? "border-[var(--accent-success-text)] bg-transparent text-[var(--accent-primary)]" : ""
                           }`}
                         />
                       </div>

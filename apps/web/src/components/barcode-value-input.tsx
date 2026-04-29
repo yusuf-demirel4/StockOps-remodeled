@@ -72,7 +72,7 @@ export function BarcodeValueInput({
       <div
         className={
           isScanning
-            ? "overflow-hidden rounded-md border border-[#d8dbd2] bg-[#111816]"
+            ? "overflow-hidden rounded-md border border-[var(--border-secondary)] bg-[var(--text-primary)]"
             : "hidden"
         }
       >
@@ -85,7 +85,7 @@ export function BarcodeValueInput({
       </div>
 
       {visibleMessage ? (
-        <p aria-live="polite" className="text-sm text-[#52605a]">
+        <p aria-live="polite" className="text-sm text-[var(--neutral-badge-text)]">
           {visibleMessage}
         </p>
       ) : null}

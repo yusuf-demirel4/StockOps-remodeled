@@ -1,7 +1,10 @@
 import { can } from "@stockops/core/inventory";
 import { getDataSourceMode } from "@/lib/data-source";
 import {
+  completeManufacturingOrder as completeDemoMo,
   confirmSalesOrder as confirmDemoSalesOrder,
+  createBom as createDemoBom,
+  createManufacturingOrder as createDemoMo,
   createProduct as createDemoProduct,
   createPurchaseOrder as createDemoPurchaseOrder,
   createSalesOrder as createDemoSalesOrder,
@@ -14,6 +17,8 @@ import {
   getDemoSnapshot,
   receivePurchaseOrder as receiveDemoPurchaseOrder,
   setProductActive as setDemoProductActive,
+  startManufacturingOrder as startDemoMo,
+  updateBom as updateDemoBom,
   updateProduct as updateDemoProduct,
   updateSupplier as updateDemoSupplier,
   updateUserRole as updateDemoUserRole,
@@ -21,6 +26,9 @@ import {
 } from "@/lib/demo-store";
 import { getPrisma } from "@/lib/prisma";
 import {
+  bomInputSchema,
+  bomUpdateInputSchema,
+  manufacturingOrderInputSchema,
   productInputSchema,
   productUpdateInputSchema,
   purchaseOrderInputSchema,
@@ -241,6 +249,8 @@ export async function getAppSnapshot(
     webhookEvents,
     notificationDeliveries,
     memberships,
+    billsOfMaterial,
+    manufacturingOrders,
   ] = await Promise.all([
     prisma.warehouse.findMany({
       where: { organizationId },
@@ -299,6 +309,16 @@ export async function getAppSnapshot(
       include: { user: true },
       orderBy: { createdAt: "asc" },
     }),
+    // BOM + Manufacturing (may not exist if migration not run)
+    (prisma as any).billOfMaterial?.findMany?.({
+      where: { organizationId },
+      include: { components: true },
+      orderBy: { createdAt: "desc" },
+    }).catch(() => []) ?? Promise.resolve([]),
+    (prisma as any).manufacturingOrder?.findMany?.({
+      where: { organizationId },
+      orderBy: { createdAt: "desc" },
+    }).catch(() => []) ?? Promise.resolve([]),
   ]);
 
   const mappedProducts = products.map(mapProduct);
@@ -409,6 +429,36 @@ export async function getAppSnapshot(
       entityId: auditLog.entityId,
       summary: auditLog.summary,
       createdAt: iso(auditLog.createdAt),
+    })),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    billsOfMaterial: billsOfMaterial.map((b: any) => ({
+      id: b.id,
+      organizationId: b.organizationId,
+      productId: b.productId,
+      name: b.name,
+      description: b.description ?? undefined,
+      isActive: b.isActive,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      components: (b.components ?? []).map((c: any) => ({
+        id: c.id,
+        bomId: c.bomId,
+        componentProductId: c.componentProductId,
+        quantity: Number(c.quantity),
+        sortOrder: c.sortOrder,
+      })),
+    })),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    manufacturingOrders: manufacturingOrders.map((m: any) => ({
+      id: m.id,
+      organizationId: m.organizationId,
+      bomId: m.bomId,
+      warehouseId: m.warehouseId,
+      code: m.code,
+      quantity: m.quantity,
+      status: m.status as import("@stockops/core/types").ManufacturingOrderStatus,
+      startedAt: m.startedAt ? iso(m.startedAt) : undefined,
+      completedAt: m.completedAt ? iso(m.completedAt) : undefined,
+      createdAt: iso(m.createdAt),
     })),
     webhookEvents: webhookEvents.map(mapWebhookEvent),
     notificationDeliveries: notificationDeliveries.map(mapNotificationDelivery),
@@ -1560,13 +1610,243 @@ export async function deleteUser(membershipId: string, context: AuthContext) {
   });
 }
 
+// ── BOM + Manufacturing ──
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+export async function createBom(input: unknown, context: AuthContext) {
+  if (!dbMode()) {
+    return createDemoBom(input, context);
+  }
+
+  ensurePermission(context, "manage_products");
+  const parsed = bomInputSchema.parse(input);
+  const prisma = getPrisma() as any;
+
+  const product = await prisma.product.findFirst({
+    where: { id: parsed.productId, organizationId: context.organization.id },
+  });
+  if (!product) throw new Error("Ürün bulunamadı.");
+
+  const bom = await prisma.billOfMaterial.create({
+    data: {
+      organizationId: context.organization.id,
+      productId: parsed.productId,
+      name: parsed.name,
+      description: parsed.description || null,
+      components: {
+        create: parsed.components.map((c: any, i: number) => ({
+          componentProductId: c.componentProductId,
+          quantity: c.quantity,
+          sortOrder: c.sortOrder ?? i,
+        })),
+      },
+    },
+  }).catch((error: unknown) => {
+    if (isUniqueConstraintError(error)) {
+      throw new Error("Bu ürün için zaten bir reçete mevcut.");
+    }
+    throw error;
+  });
+
+  await audit(context, "CREATE", "BillOfMaterial", bom.id, `${parsed.name} reçetesi oluşturuldu (${product.sku})`);
+}
+
+export async function updateBom(bomId: string, input: unknown, context: AuthContext) {
+  if (!dbMode()) {
+    return updateDemoBom(bomId, input, context);
+  }
+
+  ensurePermission(context, "manage_products");
+  const parsed = bomUpdateInputSchema.parse(input);
+  const prisma = getPrisma() as any;
+
+  const bom = await prisma.billOfMaterial.findFirst({
+    where: { id: bomId, organizationId: context.organization.id },
+  });
+  if (!bom) throw new Error("Reçete bulunamadı.");
+
+  await prisma.$transaction(async (tx: any) => {
+    if (parsed.components) {
+      await tx.bomComponent.deleteMany({ where: { bomId: bom.id } });
+      await tx.bomComponent.createMany({
+        data: parsed.components.map((c: any, i: number) => ({
+          bomId: bom.id,
+          componentProductId: c.componentProductId,
+          quantity: c.quantity,
+          sortOrder: c.sortOrder ?? i,
+        })),
+      });
+    }
+
+    await tx.billOfMaterial.update({
+      where: { id: bom.id },
+      data: {
+        name: parsed.name,
+        description: parsed.description !== undefined ? (parsed.description || null) : undefined,
+      },
+    });
+  });
+
+  await audit(context, "UPDATE", "BillOfMaterial", bom.id, `${parsed.name ?? bom.name} reçetesi güncellendi`);
+}
+
+export async function createManufacturingOrder(input: unknown, context: AuthContext) {
+  if (!dbMode()) {
+    return createDemoMo(input, context);
+  }
+
+  ensurePermission(context, "manage_stock");
+  const parsed = manufacturingOrderInputSchema.parse(input);
+  const prisma = getPrisma() as any;
+
+  const bom = await prisma.billOfMaterial.findFirst({
+    where: { id: parsed.bomId, organizationId: context.organization.id },
+  });
+  if (!bom) throw new Error("Reçete bulunamadı.");
+
+  const count = await prisma.manufacturingOrder.count({
+    where: { organizationId: context.organization.id },
+  });
+
+  const mo = await prisma.manufacturingOrder.create({
+    data: {
+      organizationId: context.organization.id,
+      bomId: parsed.bomId,
+      warehouseId: parsed.warehouseId,
+      code: nextCode("MO", count),
+      quantity: parsed.quantity,
+    },
+  });
+
+  await audit(context, "CREATE", "ManufacturingOrder", mo.id, `${mo.code} üretim emri oluşturuldu`);
+}
+
+export async function startManufacturingOrder(moId: string, context: AuthContext) {
+  if (!dbMode()) {
+    return startDemoMo(moId, context);
+  }
+
+  ensurePermission(context, "manage_stock");
+  const prisma = getPrisma() as any;
+
+  await prisma.$transaction(async (tx: any) => {
+    const mo = await tx.manufacturingOrder.findFirst({
+      where: { id: moId, organizationId: context.organization.id, status: "DRAFT" },
+    });
+    if (!mo) throw new Error("Üretim emri bulunamadı veya başlatılamaz.");
+
+    const bom = await tx.billOfMaterial.findFirst({
+      where: { id: mo.bomId },
+      include: { components: true },
+    });
+    if (!bom) throw new Error("Reçete bulunamadı.");
+
+    for (const comp of bom.components) {
+      const consumeQty = Number(comp.quantity) * mo.quantity;
+      const movements = await tx.stockMovement.findMany({
+        where: {
+          organizationId: context.organization.id,
+          warehouseId: mo.warehouseId,
+          productId: comp.componentProductId,
+        },
+      });
+      const onHand = movements.reduce((sum: number, m: any) => sum + m.quantityChange, 0);
+      if (onHand < consumeQty) {
+        throw new Error(`Yetersiz hammadde stoku (bileşen: ${comp.componentProductId}).`);
+      }
+
+      await tx.stockMovement.create({
+        data: {
+          organizationId: context.organization.id,
+          warehouseId: mo.warehouseId,
+          productId: comp.componentProductId,
+          type: "MANUFACTURE_CONSUME",
+          quantityChange: -consumeQty,
+          reference: mo.code,
+          note: "Üretim hammadde tüketimi",
+          createdById: context.user.id,
+        },
+      });
+    }
+
+    await tx.manufacturingOrder.update({
+      where: { id: mo.id },
+      data: { status: "IN_PROGRESS", startedAt: new Date() },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action: "UPDATE",
+        entityType: "ManufacturingOrder",
+        entityId: mo.id,
+        summary: `${mo.code} üretim başlatıldı`,
+      },
+    });
+  });
+}
+
+export async function completeManufacturingOrder(moId: string, context: AuthContext) {
+  if (!dbMode()) {
+    return completeDemoMo(moId, context);
+  }
+
+  ensurePermission(context, "manage_stock");
+  const prisma = getPrisma() as any;
+
+  await prisma.$transaction(async (tx: any) => {
+    const mo = await tx.manufacturingOrder.findFirst({
+      where: { id: moId, organizationId: context.organization.id, status: "IN_PROGRESS" },
+    });
+    if (!mo) throw new Error("Üretim emri bulunamadı veya tamamlanamaz.");
+
+    const bom = await tx.billOfMaterial.findFirst({
+      where: { id: mo.bomId },
+    });
+    if (!bom) throw new Error("Reçete bulunamadı.");
+
+    await tx.stockMovement.create({
+      data: {
+        organizationId: context.organization.id,
+        warehouseId: mo.warehouseId,
+        productId: bom.productId,
+        type: "MANUFACTURE_PRODUCE",
+        quantityChange: mo.quantity,
+        reference: mo.code,
+        note: "Üretim çıktısı",
+        createdById: context.user.id,
+      },
+    });
+
+    await tx.manufacturingOrder.update({
+      where: { id: mo.id },
+      data: { status: "COMPLETED", completedAt: new Date() },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action: "UPDATE",
+        entityType: "ManufacturingOrder",
+        entityId: mo.id,
+        summary: `${mo.code} üretim tamamlandı`,
+      },
+    });
+  });
+}
+
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 function nextCode(prefix: string, count: number) {
   return `${prefix}-${String(count + 1001).padStart(4, "0")}`;
 }
 
 async function audit(
   context: AuthContext,
-  action: "CREATE" | "UPDATE" | "CONFIRM" | "RECEIVE" | "CANCEL" | "PICK" | "PACK" | "SHIP",
+  action: string,
   entityType: string,
   entityId: string,
   summary: string,
@@ -1575,7 +1855,7 @@ async function audit(
     data: {
       organizationId: context.organization.id,
       actorId: context.user.id,
-      action,
+      action: action as any,
       entityType,
       entityId,
       summary,
@@ -1599,7 +1879,7 @@ export async function getSalesOrderDetails(orderId: string, context: AuthContext
     return { order: mockOrder, pickLists: [] };
   }
   const prisma = getPrisma();
-  const order = await prisma.salesOrder.findFirst({
+  const order = await (prisma.salesOrder as any).findFirst({
     where: { id: orderId, organizationId: context.organization.id },
     include: {
       lines: { include: { product: true } },
@@ -1610,8 +1890,8 @@ export async function getSalesOrderDetails(orderId: string, context: AuthContext
   if (!order) {
     throw new Error("Sipariş bulunamadı.");
   }
-  const pickLists = await prisma.pickList.findMany({
-    where: { organizationId: context.organization.id, id: { in: order.pickListItems.map(i => i.pickListId) } },
+  const pickLists = await (prisma as any).pickList.findMany({
+    where: { organizationId: context.organization.id, id: { in: order.pickListItems.map((i: any) => i.pickListId) } },
     include: { items: { include: { product: true } } },
   });
   return { order, pickLists };
@@ -1622,7 +1902,7 @@ export async function startPicking(orderId: string, context: AuthContext) {
   ensurePermission(context, "manage_stock");
   const prisma = getPrisma();
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     const order = await tx.salesOrder.findFirst({
       where: { id: orderId, organizationId: context.organization.id, status: "CONFIRMED" },
       include: { lines: true },
@@ -1651,7 +1931,7 @@ export async function startPicking(orderId: string, context: AuthContext) {
         status: "PENDING",
         priority: 1,
         items: {
-          create: order.lines.map((line) => ({
+          create: order.lines.map((line: any) => ({
             salesOrderId: order.id,
             productId: line.productId,
             quantity: line.quantity,
@@ -1684,7 +1964,7 @@ export async function updatePickListItem(
   ensurePermission(context, "manage_stock");
   const prisma = getPrisma();
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     const pickList = await tx.pickList.findFirst({
       where: { id: pickListId, organizationId: context.organization.id },
     });
@@ -1718,7 +1998,7 @@ export async function packOrder(orderId: string, context: AuthContext) {
   ensurePermission(context, "manage_stock");
   const prisma = getPrisma();
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     const order = await tx.salesOrder.findFirst({
       where: { id: orderId, organizationId: context.organization.id, status: "PICKING" },
       include: { pickListItems: true },
@@ -1728,7 +2008,7 @@ export async function packOrder(orderId: string, context: AuthContext) {
       throw new Error("Sipariş bulunamadı veya durumu uygun değil.");
     }
 
-    const allPicked = order.pickListItems.every(item => item.pickedQty >= item.quantity);
+    const allPicked = order.pickListItems.every((item: any) => item.pickedQty >= item.quantity);
     if (!allPicked) {
       throw new Error("Tüm ürünler tam olarak toplanmadan paketleme yapılamaz.");
     }
@@ -1738,7 +2018,7 @@ export async function packOrder(orderId: string, context: AuthContext) {
       data: { status: "PACKED" },
     });
 
-    const pickListIds = [...new Set(order.pickListItems.map(i => i.pickListId))];
+    const pickListIds = [...new Set(order.pickListItems.map((i: any) => i.pickListId))];
     for (const plId of pickListIds) {
       await tx.pickList.update({
         where: { id: plId },
@@ -1768,7 +2048,7 @@ export async function shipOrder(
   ensurePermission(context, "manage_stock");
   const prisma = getPrisma();
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     const order = await tx.salesOrder.findFirst({
       where: { id: orderId, organizationId: context.organization.id, status: "PACKED" },
     });
@@ -1834,7 +2114,7 @@ export async function deliverOrder(orderId: string, context: AuthContext) {
   ensurePermission(context, "manage_stock");
   const prisma = getPrisma();
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     const order = await tx.salesOrder.findFirst({
       where: { id: orderId, organizationId: context.organization.id, status: "SHIPPED" },
       include: { shipments: true },
@@ -1849,7 +2129,7 @@ export async function deliverOrder(orderId: string, context: AuthContext) {
       data: { status: "DELIVERED" },
     });
 
-    const activeShipment = order.shipments.find(s => s.status !== "DELIVERED" && s.status !== "RETURNED");
+    const activeShipment = order.shipments.find((s: any) => s.status !== "DELIVERED" && s.status !== "RETURNED");
     if (activeShipment) {
       await tx.shipment.update({
         where: { id: activeShipment.id },

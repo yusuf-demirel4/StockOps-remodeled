@@ -72,8 +72,8 @@ export default async function OrdersPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-left text-sm">
-                <thead className="text-xs uppercase text-[#6a746f]">
-                  <tr className="border-b border-[#e3e5dd]">
+                <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                  <tr className="border-b border-[var(--border-subtle)]">
                     <th className="py-2 pr-3">SKU</th>
                     <th className="py-2 pr-3">Ürün</th>
                     <th className="py-2 pr-3">Tedarikçi</th>
@@ -87,7 +87,7 @@ export default async function OrdersPage() {
                 <tbody>
                   {purchaseRecommendations.map((recommendation) => (
                     <tr
-                      className="border-b border-[#eef0ea] last:border-0"
+                      className="border-b border-[var(--border-table)] last:border-0"
                       key={recommendation.product.id}
                     >
                       <td className="py-3 pr-3 font-mono text-xs">
@@ -139,8 +139,8 @@ export default async function OrdersPage() {
         <Panel title="Satış siparişleri">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="text-xs uppercase text-[#6a746f]">
-                <tr className="border-b border-[#e3e5dd]">
+              <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                <tr className="border-b border-[var(--border-subtle)]">
                   <th className="py-2 pr-3">Kod</th>
                   <th className="py-2 pr-3">Müşteri</th>
                   <th className="py-2 pr-3">Satırlar</th>
@@ -151,11 +151,11 @@ export default async function OrdersPage() {
               <tbody>
                 {snapshot.salesOrders.map((order) => (
                   <tr
-                    className="border-b border-[#eef0ea] align-top last:border-0"
+                    className="border-b border-[var(--border-table)] align-top last:border-0"
                     key={order.id}
                   >
                     <td className="py-3 pr-3 font-mono text-xs">
-                      <Link href={`/orders/${order.id}`} className="text-[#236d5a] hover:underline">
+                      <Link href={`/orders/${order.id}`} className="text-[var(--accent-primary)] hover:underline">
                         {order.code}
                       </Link>
                     </td>
@@ -190,7 +190,7 @@ export default async function OrdersPage() {
                         ) : null}
                         {order.status !== "DRAFT" &&
                         order.status !== "CONFIRMED" ? (
-                          <span className="text-xs text-[#8a938e]">-</span>
+                          <span className="text-xs text-[var(--placeholder)]">-</span>
                         ) : null}
                       </div>
                     </td>
@@ -204,8 +204,8 @@ export default async function OrdersPage() {
         <Panel title="Satın alma siparişleri">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="text-xs uppercase text-[#6a746f]">
-                <tr className="border-b border-[#e3e5dd]">
+              <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                <tr className="border-b border-[var(--border-subtle)]">
                   <th className="py-2 pr-3">Kod</th>
                   <th className="py-2 pr-3">Tedarikçi</th>
                   <th className="py-2 pr-3">Satırlar</th>
@@ -216,7 +216,7 @@ export default async function OrdersPage() {
               <tbody>
                 {snapshot.purchaseOrders.map((order) => (
                   <tr
-                    className="border-b border-[#eef0ea] align-top last:border-0"
+                    className="border-b border-[var(--border-table)] align-top last:border-0"
                     key={order.id}
                   >
                     <td className="py-3 pr-3 font-mono text-xs">{order.code}</td>
@@ -263,8 +263,8 @@ export default async function OrdersPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="text-xs uppercase text-[#6a746f]">
-                  <tr className="border-b border-[#e3e5dd]">
+                <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                  <tr className="border-b border-[var(--border-subtle)]">
                     <th className="py-2 pr-3">Kod</th>
                     <th className="py-2 pr-3">Sipariş</th>
                     <th className="py-2 pr-3">Satırlar</th>
@@ -280,7 +280,7 @@ export default async function OrdersPage() {
                     );
                     return (
                       <tr
-                        className="border-b border-[#eef0ea] align-top last:border-0"
+                        className="border-b border-[var(--border-table)] align-top last:border-0"
                         key={salesReturn.id}
                       >
                         <td className="py-3 pr-3 font-mono text-xs">
@@ -297,7 +297,7 @@ export default async function OrdersPage() {
                             )
                             .join(", ")}
                         </td>
-                        <td className="py-3 pr-3 text-[#52605a]">
+                        <td className="py-3 pr-3 text-[var(--neutral-badge-text)]">
                           {salesReturn.reason ?? "-"}
                         </td>
                         <td className="py-3 pr-3">

@@ -43,8 +43,8 @@ export default async function CustomersPage() {
         <Panel title="Müşteri listesi">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-left text-sm">
-              <thead className="text-xs uppercase text-[#6a746f]">
-                <tr className="border-b border-[#e3e5dd]">
+              <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                <tr className="border-b border-[var(--border-subtle)]">
                   <th className="py-2 pr-3">Kod</th>
                   <th className="py-2 pr-3">Firma / Müşteri</th>
                   <th className="py-2 pr-3">E-posta</th>
@@ -62,7 +62,7 @@ export default async function CustomersPage() {
                 ) : (
                   customers.map((customer) => (
                     <tr
-                      className="border-b border-[#eef0ea] align-top last:border-0"
+                      className="border-b border-[var(--border-table)] align-top last:border-0"
                       key={customer.id}
                     >
                       <td className="py-3 pr-3 font-medium">{customer.code}</td>

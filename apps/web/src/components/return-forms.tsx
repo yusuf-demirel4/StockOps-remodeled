@@ -28,7 +28,7 @@ export function CreateReturnDisclosure({
         <RotateCcw aria-hidden="true" className="size-4" />
         İade oluştur
       </summary>
-      <div className="mt-3 rounded-md border border-[#e3e5dd] bg-[#fafbf7] p-3">
+      <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-empty)] p-3">
         <CreateReturnForm order={order} products={products} />
       </div>
     </details>
@@ -47,7 +47,7 @@ function CreateReturnForm({
       {(pending) => (
         <>
           <input name="salesOrderId" type="hidden" value={order.id} />
-          <p className="text-xs text-[#52605a]">
+          <p className="text-xs text-[var(--neutral-badge-text)]">
             Sipariş <span className="font-mono">{order.code}</span> için iade
             talebi.
           </p>
@@ -56,14 +56,14 @@ function CreateReturnForm({
               const product = products.find((p) => p.id === line.productId);
               return (
                 <div
-                  className="grid grid-cols-[1fr_120px] items-center gap-3 rounded-md border border-[#e3e5dd] bg-white px-3 py-2"
+                  className="grid grid-cols-[1fr_120px] items-center gap-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2"
                   key={`${line.productId}-${index}`}
                 >
                   <div>
                     <p className="text-sm font-medium">
                       {product?.name ?? "Bilinmeyen ürün"}
                     </p>
-                    <p className="font-mono text-xs text-[#6a746f]">
+                    <p className="font-mono text-xs text-[var(--text-secondary)]">
                       {product?.sku ?? line.productId} • Sipariş: {line.quantity}
                     </p>
                   </div>

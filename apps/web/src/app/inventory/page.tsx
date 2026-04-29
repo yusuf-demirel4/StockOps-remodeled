@@ -50,8 +50,8 @@ export default async function InventoryPage() {
           <Panel title="Mevcut stok">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="text-xs uppercase text-[#6a746f]">
-                  <tr className="border-b border-[#e3e5dd]">
+                <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                  <tr className="border-b border-[var(--border-subtle)]">
                     <th className="py-2 pr-3">SKU</th>
                     <th className="py-2 pr-3">Ürün</th>
                     <th className="py-2 pr-3">Depo</th>
@@ -62,7 +62,7 @@ export default async function InventoryPage() {
                 <tbody>
                   {snapshot.stockRows.map((row) => (
                     <tr
-                      className="border-b border-[#eef0ea] last:border-0"
+                      className="border-b border-[var(--border-table)] last:border-0"
                       key={`${row.product.id}-${row.warehouse.id}`}
                     >
                       <td className="py-3 pr-3 font-mono text-xs">
@@ -88,8 +88,8 @@ export default async function InventoryPage() {
           <Panel title="Hareket geçmişi">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[820px] text-left text-sm">
-                <thead className="text-xs uppercase text-[#6a746f]">
-                  <tr className="border-b border-[#e3e5dd]">
+                <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                  <tr className="border-b border-[var(--border-subtle)]">
                     <th className="py-2 pr-3">Tarih</th>
                     <th className="py-2 pr-3">Tip</th>
                     <th className="py-2 pr-3">SKU</th>
@@ -101,10 +101,10 @@ export default async function InventoryPage() {
                 <tbody>
                   {snapshot.stockMovements.map((movement) => (
                     <tr
-                      className="border-b border-[#eef0ea] last:border-0"
+                      className="border-b border-[var(--border-table)] last:border-0"
                       key={movement.id}
                     >
-                      <td className="py-3 pr-3 text-[#65706b]">
+                      <td className="py-3 pr-3 text-[var(--text-muted)]">
                         {formatDate(movement.createdAt)}
                       </td>
                       <td className="py-3 pr-3">

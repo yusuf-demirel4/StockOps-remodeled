@@ -113,7 +113,7 @@ export function BarcodeProductPicker({
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-md border border-[#d8dbd2] bg-[#111816]">
+      <div className="overflow-hidden rounded-md border border-[var(--border-secondary)] bg-[var(--text-primary)]">
         <video
           className={isScanning ? "aspect-video w-full object-cover" : "hidden"}
           muted
@@ -121,14 +121,14 @@ export function BarcodeProductPicker({
           ref={videoRef}
         />
         {!isScanning ? (
-          <div className="flex aspect-video items-center justify-center text-[#dce5df]">
+          <div className="flex aspect-video items-center justify-center text-[var(--border-subtle)]">
             <ScanLine aria-hidden="true" className="size-8" />
           </div>
         ) : null}
       </div>
 
       {visibleMessage ? (
-        <p aria-live="polite" className="text-sm text-[#52605a]">
+        <p aria-live="polite" className="text-sm text-[var(--neutral-badge-text)]">
           {visibleMessage}
         </p>
       ) : null}

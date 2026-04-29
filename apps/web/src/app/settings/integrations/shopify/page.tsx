@@ -31,7 +31,7 @@ export default async function ShopifyIntegrationPage() {
     >
       <div className="space-y-6">
         <Link
-          className="inline-flex items-center gap-2 text-sm text-[#42504a] hover:text-[#17211d]"
+          className="inline-flex items-center gap-2 text-sm text-[var(--text-nav)] hover:text-[var(--text-nav-hover)]"
           href="/settings/integrations"
         >
           <ArrowLeft className="size-4" />
@@ -109,7 +109,7 @@ export default async function ShopifyIntegrationPage() {
                     name="autoFixThreshold"
                     type="number"
                   />
-                  <span className="text-xs text-[#8a938e]">
+                  <span className="text-xs text-[var(--placeholder)]">
                     Bu esik altindaki farklar otomatik duzeltilir
                   </span>
                 </label>
@@ -123,37 +123,37 @@ export default async function ShopifyIntegrationPage() {
           <div className="space-y-6">
             <Panel title="Senkronizasyon Durumu">
               <div className="grid gap-4 sm:grid-cols-3">
-                <div className="rounded-md border border-[#e3e5dd] p-3 text-center">
-                  <p className="text-2xl font-semibold text-[#1f2523]">
+                <div className="rounded-md border border-[var(--border-subtle)] p-3 text-center">
+                  <p className="text-2xl font-semibold text-[var(--text-primary)]">
                     {shopifyEvents.length}
                   </p>
-                  <p className="text-xs text-[#66706b]">Toplam Webhook</p>
+                  <p className="text-xs text-[var(--text-secondary)]">Toplam Webhook</p>
                 </div>
-                <div className="rounded-md border border-[#dff3e8] bg-[#f7fcf9] p-3 text-center">
-                  <p className="text-2xl font-semibold text-[#177347]">
+                <div className="rounded-md border border-[var(--accent-success-bg2)] bg-[var(--accent-success-bg)] p-3 text-center">
+                  <p className="text-2xl font-semibold text-[var(--accent-success-text2)]">
                     {processedCount}
                   </p>
-                  <p className="text-xs text-[#66706b]">Basarili</p>
+                  <p className="text-xs text-[var(--text-secondary)]">Basarili</p>
                 </div>
-                <div className="rounded-md border border-[#ffe1d9] bg-[#fff9f7] p-3 text-center">
-                  <p className="text-2xl font-semibold text-[#9a301c]">
+                <div className="rounded-md border border-[var(--accent-danger-bg2)] bg-[var(--accent-danger-bg)] p-3 text-center">
+                  <p className="text-2xl font-semibold text-[var(--accent-danger-text)]">
                     {failedCount}
                   </p>
-                  <p className="text-xs text-[#66706b]">Basarisiz</p>
+                  <p className="text-xs text-[var(--text-secondary)]">Basarisiz</p>
                 </div>
               </div>
             </Panel>
 
             <Panel title="Son Webhook Olaylari">
               {shopifyEvents.length === 0 ? (
-                <p className="py-4 text-center text-sm text-[#66706b]">
+                <p className="py-4 text-center text-sm text-[var(--text-secondary)]">
                   Henuz Shopify webhook olayi yok.
                 </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
-                    <thead className="text-xs uppercase text-[#6a746f]">
-                      <tr className="border-b border-[#e3e5dd]">
+                    <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                      <tr className="border-b border-[var(--border-subtle)]">
                         <th className="py-2 pr-3">Konu</th>
                         <th className="py-2 pr-3">Durum</th>
                         <th className="py-2 pr-3">Deneme</th>
@@ -163,7 +163,7 @@ export default async function ShopifyIntegrationPage() {
                     <tbody>
                       {shopifyEvents.map((event) => (
                         <tr
-                          className="border-b border-[#eef0ea] last:border-0"
+                          className="border-b border-[var(--border-table)] last:border-0"
                           key={event.id}
                         >
                           <td className="py-2 pr-3 font-mono text-xs">
@@ -183,7 +183,7 @@ export default async function ShopifyIntegrationPage() {
                             </StatusBadge>
                           </td>
                           <td className="py-2 pr-3">{event.attempts}</td>
-                          <td className="py-2 text-xs text-[#66706b]">
+                          <td className="py-2 text-xs text-[var(--text-secondary)]">
                             {new Date(event.receivedAt).toLocaleString("tr-TR")}
                           </td>
                         </tr>
@@ -210,13 +210,13 @@ export default async function ShopifyIntegrationPage() {
                   { topic: "refunds/create", desc: "Iade olusturuldu" },
                 ].map((item) => (
                   <div
-                    className="flex items-center justify-between rounded-md border border-[#e3e5dd] px-3 py-2"
+                    className="flex items-center justify-between rounded-md border border-[var(--border-subtle)] px-3 py-2"
                     key={item.topic}
                   >
-                    <span className="font-mono text-xs text-[#42504a]">
+                    <span className="font-mono text-xs text-[var(--text-nav)]">
                       {item.topic}
                     </span>
-                    <span className="text-xs text-[#8a938e]">{item.desc}</span>
+                    <span className="text-xs text-[var(--placeholder)]">{item.desc}</span>
                   </div>
                 ))}
               </div>

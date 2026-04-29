@@ -63,7 +63,7 @@ export function SupplierUpdateDisclosure({ supplier }: { supplier: Supplier }) {
         <Pencil aria-hidden="true" className="size-4" />
         Düzenle
       </summary>
-      <div className="mt-3 rounded-md border border-[#e3e5dd] bg-[#fafbf7] p-3">
+      <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-empty)] p-3">
         <SupplierUpdateForm supplier={supplier} />
       </div>
     </details>

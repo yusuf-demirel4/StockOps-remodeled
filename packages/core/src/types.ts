@@ -12,7 +12,15 @@ export type StockMovementType =
   | "ADJUSTMENT"
   | "SALE"
   | "PURCHASE_RECEIPT"
-  | "TRANSFER";
+  | "TRANSFER"
+  | "MANUFACTURE_CONSUME"
+  | "MANUFACTURE_PRODUCE";
+
+export type ManufacturingOrderStatus =
+  | "DRAFT"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";
 
 export type InvoiceStatus =
   | "DRAFT"
@@ -389,6 +397,120 @@ export type NotificationDelivery = {
   sentAt?: string;
 };
 
+// ── BOM + Manufacturing ──
+
+export type BomComponent = {
+  id: string;
+  bomId: string;
+  componentProductId: string;
+  quantity: number;
+  sortOrder: number;
+};
+
+export type BillOfMaterial = {
+  id: string;
+  organizationId: string;
+  productId: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  components: BomComponent[];
+};
+
+export type ManufacturingOrder = {
+  id: string;
+  organizationId: string;
+  bomId: string;
+  warehouseId: string;
+  code: string;
+  quantity: number;
+  status: ManufacturingOrderStatus;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+};
+
+// ── B2B Portal ──
+
+export type CustomerUser = {
+  id: string;
+  customerId: string;
+  name: string;
+  email: string;
+  isActive: boolean;
+};
+
+export type CustomerPriceTier = {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  productId: string;
+  tierPrice: number;
+  minQuantity: number;
+};
+
+export type OrganizationBranding = {
+  id: string;
+  organizationId: string;
+  logoUrl?: string;
+  primaryColor?: string;
+  accentColor?: string;
+  portalDomain?: string;
+};
+
+export type PortalAuthContext = {
+  customerUser: CustomerUser;
+  customer: Customer;
+  organization: Organization;
+  branding?: OrganizationBranding;
+};
+
+// ── Reports ──
+
+export type ReportColumn = {
+  key: string;
+  label: string;
+  type: "string" | "number" | "date" | "currency" | "boolean";
+};
+
+export type ReportFilter = {
+  column: string;
+  operator: "eq" | "neq" | "gt" | "lt" | "gte" | "lte" | "contains" | "between";
+  value: string;
+  value2?: string;
+};
+
+export type ReportDefinition = {
+  id: string;
+  name: string;
+  category: string;
+  columns: ReportColumn[];
+  defaultFilters?: ReportFilter[];
+};
+
+export type SavedReport = {
+  id: string;
+  organizationId: string;
+  name: string;
+  reportDefinitionId: string;
+  columns: string[];
+  filters: ReportFilter[];
+  dateRange?: { start: string; end: string };
+  createdById: string;
+  createdAt: string;
+};
+
+export type ScheduledReport = {
+  id: string;
+  organizationId: string;
+  savedReportId: string;
+  frequency: "daily" | "weekly" | "monthly";
+  recipients: string[];
+  nextRunAt: string;
+  lastRunAt?: string;
+  isActive: boolean;
+};
+
 export type AppState = {
   organizations: Organization[];
   users: User[];
@@ -406,6 +528,8 @@ export type AppState = {
   apiTokens?: ApiToken[];
   webhookEvents?: WebhookEvent[];
   notificationDeliveries?: NotificationDelivery[];
+  billsOfMaterial?: BillOfMaterial[];
+  manufacturingOrders?: ManufacturingOrder[];
 };
 
 export type AuthContext = {
@@ -435,6 +559,8 @@ export type AppSnapshot = {
   auditLogs: AuditLog[];
   webhookEvents: WebhookEvent[];
   notificationDeliveries: NotificationDelivery[];
+  billsOfMaterial: BillOfMaterial[];
+  manufacturingOrders: ManufacturingOrder[];
   permissions: {
     canManageUsers: boolean;
     canManageProducts: boolean;

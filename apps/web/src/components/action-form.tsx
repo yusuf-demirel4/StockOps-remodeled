@@ -59,8 +59,8 @@ function ActionMessage({ state }: { state: ActionState }) {
       aria-live="polite"
       className={clsx(
         "rounded-md px-3 py-2 text-sm",
-        state.status === "success" && "bg-[#e0f2e9] text-[#17623f]",
-        state.status === "error" && "bg-[#ffe1d9] text-[#9a301c]",
+        state.status === "success" && "bg-[var(--accent-success-bg)] text-[var(--accent-success-text)]",
+        state.status === "error" && "bg-[var(--accent-danger-bg2)] text-[var(--accent-danger-text)]",
       )}
     >
       {state.message}

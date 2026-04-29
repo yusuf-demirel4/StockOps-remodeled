@@ -199,5 +199,7 @@ export function createInitialState(): AppState {
     notificationDeliveries: [],
     customers: [],
     invoices: [],
+    billsOfMaterial: [],
+    manufacturingOrders: [],
   };
 }

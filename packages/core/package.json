@@ -20,7 +20,8 @@
     "./types": "./src/types.ts",
     "./webhooks": "./src/webhooks.ts",
     "./logger": "./src/logger.ts",
-    "./totp": "./src/totp.ts"
+    "./totp": "./src/totp.ts",
+    "./reports": "./src/reports.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

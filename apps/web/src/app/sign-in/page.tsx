@@ -18,14 +18,14 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const { error } = await searchParams;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f7f7f2] px-5 py-10 text-[#1f2523]">
-      <section className="w-full max-w-[420px] rounded-lg border border-[#d8dbd2] bg-white p-6 shadow-sm">
+    <main className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)] px-5 py-10 text-[var(--text-primary)]">
+      <section className="w-full max-w-[420px] rounded-lg border border-[var(--border-secondary)] bg-[var(--bg-card)] p-6 shadow-sm">
         <div className="flex items-center gap-3">
-          <span className="inline-flex size-10 items-center justify-center rounded-md bg-[#236d5a] text-white">
+          <span className="inline-flex size-10 items-center justify-center rounded-md bg-[var(--accent-primary)] text-white">
             <Boxes aria-hidden="true" className="size-5" />
           </span>
           <div>
-            <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#66706b]">
+            <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--text-secondary)]">
               StockOps
             </p>
             <h1 className="text-xl font-semibold">Giriş yap</h1>
@@ -33,7 +33,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         </div>
 
         {error ? (
-          <div className="mt-5 rounded-md border border-[#ffd0c3] bg-[#fff1ed] px-3 py-2 text-sm text-[#9a341f]">
+          <div className="mt-5 rounded-md border border-[var(--accent-danger-bg)] bg-[var(--accent-danger-bg)] px-3 py-2 text-sm text-[var(--accent-danger-text)]">
             E-posta veya şifre hatalı.
           </div>
         ) : null}
@@ -65,7 +65,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           </button>
         </form>
 
-        <p className="mt-4 text-sm text-[#66706b]">
+        <p className="mt-4 text-sm text-[var(--text-secondary)]">
           Demo hesap hazır gelir. Database modunda aynı kullanıcıyı seed komutu
           oluşturur.
         </p>

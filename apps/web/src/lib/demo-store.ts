@@ -22,11 +22,20 @@ import {
   warehouseUpdateInputSchema,
 } from "@stockops/core/schemas";
 import { hashPassword, verifyPassword } from "@stockops/core/password";
+import {
+  bomInputSchema,
+  bomUpdateInputSchema,
+  manufacturingOrderInputSchema,
+} from "@stockops/core/schemas";
 import type {
   AppState,
   AppSnapshot,
   AuthContext,
   AuditLog,
+  BillOfMaterial,
+  BomComponent,
+  ManufacturingOrder,
+  ManufacturingOrderStatus,
   Member,
   NotificationDelivery,
   Product,
@@ -140,6 +149,12 @@ export function getDemoSnapshot(context: AuthContext): AppSnapshot {
     purchaseOrders,
     salesReturns: [],
     productVariants: [],
+    billsOfMaterial: (appState.billsOfMaterial ?? []).filter(
+      (b) => b.organizationId === organization.id,
+    ),
+    manufacturingOrders: (appState.manufacturingOrders ?? []).filter(
+      (m) => m.organizationId === organization.id,
+    ),
     stockRows,
     criticalRows,
     openSalesOrders: getOpenSalesOrders(salesOrders),
@@ -1061,6 +1076,250 @@ export function deleteUser(membershipId: string, context?: AuthContext) {
     entityType: "User",
     entityId: targetMembership.userId,
     summary: `${targetUser?.name} kullanıcısı organizasyondan çıkarıldı`,
+  });
+}
+
+// ── BOM + Manufacturing ──
+
+export function createBom(input: unknown, context?: AuthContext) {
+  const parsed = bomInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(membership.role, "manage_products")) {
+    throw new Error("Bu rol ürün reçetesi oluşturamaz.");
+  }
+
+  const product = appState.products.find(
+    (p) => p.id === parsed.productId && p.organizationId === organization.id,
+  );
+  if (!product) throw new Error("Ürün bulunamadı.");
+
+  const existing = (appState.billsOfMaterial ?? []).find(
+    (b) => b.productId === parsed.productId && b.organizationId === organization.id,
+  );
+  if (existing) throw new Error("Bu ürün için zaten bir reçete mevcut.");
+
+  const bomId = id("bom");
+  const components: BomComponent[] = parsed.components.map((c, i) => ({
+    id: id("bomc"),
+    bomId,
+    componentProductId: c.componentProductId,
+    quantity: c.quantity,
+    sortOrder: c.sortOrder ?? i,
+  }));
+
+  const bom: BillOfMaterial = {
+    id: bomId,
+    organizationId: organization.id,
+    productId: parsed.productId,
+    name: parsed.name,
+    description: parsed.description,
+    isActive: true,
+    components,
+  };
+
+  appState.billsOfMaterial ??= [];
+  appState.billsOfMaterial.unshift(bom);
+
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "CREATE",
+    entityType: "BillOfMaterial",
+    entityId: bom.id,
+    summary: `${bom.name} reçetesi oluşturuldu (${product.sku})`,
+  });
+
+  return bom;
+}
+
+export function updateBom(bomId: string, input: unknown, context?: AuthContext) {
+  const parsed = bomUpdateInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(membership.role, "manage_products")) {
+    throw new Error("Bu rol ürün reçetesi düzenleyemez.");
+  }
+
+  const bom = (appState.billsOfMaterial ?? []).find(
+    (b) => b.id === bomId && b.organizationId === organization.id,
+  );
+  if (!bom) throw new Error("Reçete bulunamadı.");
+
+  if (parsed.name) bom.name = parsed.name;
+  if (parsed.description !== undefined) bom.description = parsed.description;
+  if (parsed.components) {
+    bom.components = parsed.components.map((c, i) => ({
+      id: id("bomc"),
+      bomId: bom.id,
+      componentProductId: c.componentProductId,
+      quantity: c.quantity,
+      sortOrder: c.sortOrder ?? i,
+    }));
+  }
+
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "UPDATE",
+    entityType: "BillOfMaterial",
+    entityId: bom.id,
+    summary: `${bom.name} reçetesi güncellendi`,
+  });
+
+  return bom;
+}
+
+export function createManufacturingOrder(input: unknown, context?: AuthContext) {
+  const parsed = manufacturingOrderInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(membership.role, "manage_stock")) {
+    throw new Error("Bu rol üretim emri oluşturamaz.");
+  }
+
+  const bom = (appState.billsOfMaterial ?? []).find(
+    (b) => b.id === parsed.bomId && b.organizationId === organization.id,
+  );
+  if (!bom) throw new Error("Reçete bulunamadı.");
+
+  const warehouse = appState.warehouses.find(
+    (w) => w.id === parsed.warehouseId && w.organizationId === organization.id,
+  );
+  if (!warehouse) throw new Error("Depo bulunamadı.");
+
+  const moCount = (appState.manufacturingOrders ?? []).length;
+  const mo: ManufacturingOrder = {
+    id: id("mo"),
+    organizationId: organization.id,
+    bomId: parsed.bomId,
+    warehouseId: parsed.warehouseId,
+    code: code("MO", moCount),
+    quantity: parsed.quantity,
+    status: "DRAFT",
+    createdAt: new Date().toISOString(),
+  };
+
+  appState.manufacturingOrders ??= [];
+  appState.manufacturingOrders.unshift(mo);
+
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "CREATE",
+    entityType: "ManufacturingOrder",
+    entityId: mo.id,
+    summary: `${mo.code} üretim emri oluşturuldu`,
+  });
+
+  return mo;
+}
+
+export function startManufacturingOrder(moId: string, context?: AuthContext) {
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(membership.role, "manage_stock")) {
+    throw new Error("Bu rol üretim emri başlatamaz.");
+  }
+
+  const mo = (appState.manufacturingOrders ?? []).find(
+    (m) => m.id === moId && m.organizationId === organization.id,
+  );
+  if (!mo) throw new Error("Üretim emri bulunamadı.");
+  if (mo.status !== "DRAFT") throw new Error("Sadece taslak üretim emirleri başlatılabilir.");
+
+  const bom = (appState.billsOfMaterial ?? []).find((b) => b.id === mo.bomId);
+  if (!bom) throw new Error("Reçete bulunamadı.");
+
+  // Consume raw materials
+  for (const comp of bom.components) {
+    const consumeQty = comp.quantity * mo.quantity;
+    assertEnoughStock(appState.stockMovements, mo.warehouseId, [
+      { productId: comp.componentProductId, quantity: consumeQty },
+    ]);
+
+    appState.stockMovements.unshift({
+      id: id("mov"),
+      organizationId: organization.id,
+      warehouseId: mo.warehouseId,
+      productId: comp.componentProductId,
+      type: "MANUFACTURE_CONSUME",
+      quantityChange: -consumeQty,
+      reference: mo.code,
+      note: "Üretim hammadde tüketimi",
+      createdById: user.id,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  mo.status = "IN_PROGRESS";
+  mo.startedAt = new Date().toISOString();
+
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "UPDATE",
+    entityType: "ManufacturingOrder",
+    entityId: mo.id,
+    summary: `${mo.code} üretim başlatıldı, hammaddeler tüketildi`,
+  });
+}
+
+export function completeManufacturingOrder(moId: string, context?: AuthContext) {
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(membership.role, "manage_stock")) {
+    throw new Error("Bu rol üretim emri tamamlayamaz.");
+  }
+
+  const mo = (appState.manufacturingOrders ?? []).find(
+    (m) => m.id === moId && m.organizationId === organization.id,
+  );
+  if (!mo) throw new Error("Üretim emri bulunamadı.");
+  if (mo.status !== "IN_PROGRESS") throw new Error("Sadece üretimde olan emirler tamamlanabilir.");
+
+  const bom = (appState.billsOfMaterial ?? []).find((b) => b.id === mo.bomId);
+  if (!bom) throw new Error("Reçete bulunamadı.");
+
+  // Produce finished goods
+  appState.stockMovements.unshift({
+    id: id("mov"),
+    organizationId: organization.id,
+    warehouseId: mo.warehouseId,
+    productId: bom.productId,
+    type: "MANUFACTURE_PRODUCE",
+    quantityChange: mo.quantity,
+    reference: mo.code,
+    note: "Üretim çıktısı",
+    createdById: user.id,
+    createdAt: new Date().toISOString(),
+  });
+
+  mo.status = "COMPLETED";
+  mo.completedAt = new Date().toISOString();
+
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "UPDATE",
+    entityType: "ManufacturingOrder",
+    entityId: mo.id,
+    summary: `${mo.code} üretim tamamlandı, mamul stoka eklendi`,
   });
 }
 

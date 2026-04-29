@@ -1,4 +1,5 @@
 import type {
+  ManufacturingOrderStatus,
   Product,
   PurchaseOrderStatus,
   SalesOrderStatus,
@@ -49,9 +50,22 @@ export function movementLabel(type: StockMovementType) {
     SALE: "Satış",
     PURCHASE_RECEIPT: "Satın alma teslimi",
     TRANSFER: "Transfer",
+    MANUFACTURE_CONSUME: "Üretim tüketim",
+    MANUFACTURE_PRODUCE: "Üretim çıktı",
   };
 
   return labels[type];
+}
+
+export function manufacturingStatusLabel(status: ManufacturingOrderStatus) {
+  const labels: Record<ManufacturingOrderStatus, string> = {
+    DRAFT: "Taslak",
+    IN_PROGRESS: "Üretimde",
+    COMPLETED: "Tamamlandı",
+    CANCELLED: "İptal",
+  };
+
+  return labels[status];
 }
 
 export function salesStatusLabel(status: SalesOrderStatus) {

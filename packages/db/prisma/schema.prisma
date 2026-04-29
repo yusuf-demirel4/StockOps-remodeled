@@ -22,6 +22,15 @@ enum StockMovementType {
   SALE
   PURCHASE_RECEIPT
   TRANSFER
+  MANUFACTURE_CONSUME
+  MANUFACTURE_PRODUCE
+}
+
+enum ManufacturingOrderStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
 }
 
 enum SalesOrderStatus {
@@ -157,6 +166,12 @@ model Organization {
   pickLists              PickList[]
   webhookEvents          WebhookEvent[]
   warehouses             Warehouse[]
+  billsOfMaterial        BillOfMaterial[]
+  manufacturingOrders    ManufacturingOrder[]
+  customerPriceTiers     CustomerPriceTier[]
+  branding               OrganizationBranding?
+  savedReports           SavedReport[]
+  scheduledReports       ScheduledReport[]
 }
 
 model User {
@@ -175,6 +190,7 @@ model User {
   pickLists      PickList[]
   sessions       Session[]
   stockMovements StockMovement[]
+  savedReports   SavedReport[]
 }
 
 model ApiToken {
@@ -233,9 +249,10 @@ model Warehouse {
   name           String
   isDefault      Boolean         @default(false)
   createdAt      DateTime        @default(now())
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  pickLists      PickList[]
-  stockMovements StockMovement[]
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pickLists           PickList[]
+  stockMovements      StockMovement[]
+  manufacturingOrders ManufacturingOrder[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -269,6 +286,9 @@ model Product {
   stockMovements     StockMovement[]
   suppliers          ProductSupplier[]
   variants           ProductVariant[]
+  bom                BillOfMaterial?
+  bomComponents      BomComponent[]   @relation("BomComponentProduct")
+  priceTiers         CustomerPriceTier[]
 
   @@unique([organizationId, sku])
   @@index([organizationId, barcode])
@@ -496,9 +516,11 @@ model Customer {
   isActive        Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   invoices        Invoice[]
   salesOrders     SalesOrder[]
+  customerUsers   CustomerUser[]
+  priceTiers      CustomerPriceTier[]
 
   @@unique([organizationId, code])
   @@index([organizationId, name])
@@ -688,4 +710,145 @@ model PickListItem {
   @@index([pickListId])
   @@index([salesOrderId])
   @@index([productId])
+}
+
+// ── BOM + Manufacturing ──
+
+model BillOfMaterial {
+  id                  String               @id @default(cuid())
+  organizationId      String
+  productId           String               @unique
+  name                String
+  description         String?
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product             Product              @relation(fields: [productId], references: [id], onDelete: Restrict)
+  components          BomComponent[]
+  manufacturingOrders ManufacturingOrder[]
+
+  @@index([organizationId])
+}
+
+model BomComponent {
+  id                 String         @id @default(cuid())
+  bomId              String
+  componentProductId String
+  quantity           Decimal        @db.Decimal(12, 4)
+  sortOrder          Int            @default(0)
+  bom                BillOfMaterial @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  componentProduct   Product        @relation("BomComponentProduct", fields: [componentProductId], references: [id], onDelete: Restrict)
+
+  @@index([bomId])
+}
+
+model ManufacturingOrder {
+  id             String                   @id @default(cuid())
+  organizationId String
+  bomId          String
+  warehouseId    String
+  code           String
+  quantity       Int
+  status         ManufacturingOrderStatus @default(DRAFT)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bom            BillOfMaterial           @relation(fields: [bomId], references: [id], onDelete: Restrict)
+  warehouse      Warehouse                @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+}
+
+// ── B2B Portal ──
+
+model CustomerUser {
+  id           String            @id @default(cuid())
+  customerId   String
+  name         String
+  email        String            @unique
+  passwordHash String
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  customer     Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sessions     CustomerSession[]
+
+  @@index([customerId])
+}
+
+model CustomerSession {
+  id             String       @id @default(cuid())
+  customerUserId String
+  tokenHash      String       @unique
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  customerUser   CustomerUser @relation(fields: [customerUserId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model CustomerPriceTier {
+  id             String       @id @default(cuid())
+  organizationId String
+  customerId     String
+  productId      String
+  tierPrice      Decimal      @db.Decimal(12, 2)
+  minQuantity    Int          @default(1)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, customerId, productId, minQuantity])
+  @@index([customerId, productId])
+}
+
+model OrganizationBranding {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  logoUrl        String?
+  primaryColor   String?
+  accentColor    String?
+  portalDomain   String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ── Reports ──
+
+model SavedReport {
+  id                 String            @id @default(cuid())
+  organizationId     String
+  name               String
+  reportDefinitionId String
+  columns            Json
+  filters            Json
+  dateRange          Json?
+  createdById        String
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy          User              @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  scheduledReports   ScheduledReport[]
+
+  @@index([organizationId])
+}
+
+model ScheduledReport {
+  id             String       @id @default(cuid())
+  organizationId String
+  savedReportId  String
+  frequency      String
+  recipients     Json
+  nextRunAt      DateTime
+  lastRunAt      DateTime?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  savedReport    SavedReport  @relation(fields: [savedReportId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([isActive, nextRunAt])
 }

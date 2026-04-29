@@ -76,8 +76,8 @@ export default async function SettingsPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-left text-sm">
-                  <thead className="text-xs uppercase text-[#6a746f]">
-                    <tr className="border-b border-[#e3e5dd]">
+                  <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                    <tr className="border-b border-[var(--border-subtle)]">
                       <th className="py-2 pr-3">Kod</th>
                       <th className="py-2 pr-3">Depo</th>
                       <th className="py-2 pr-3">Durum</th>
@@ -87,7 +87,7 @@ export default async function SettingsPage() {
                   <tbody>
                     {snapshot.warehouses.map((warehouse) => (
                       <tr
-                        className="border-b border-[#eef0ea] align-top last:border-0"
+                        className="border-b border-[var(--border-table)] align-top last:border-0"
                         key={warehouse.id}
                       >
                         <td className="py-3 pr-3 font-mono text-xs">
@@ -133,8 +133,8 @@ export default async function SettingsPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[860px] text-left text-sm">
-                  <thead className="text-xs uppercase text-[#6a746f]">
-                    <tr className="border-b border-[#e3e5dd]">
+                  <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                    <tr className="border-b border-[var(--border-subtle)]">
                       <th className="py-2 pr-3">Kaynak</th>
                       <th className="py-2 pr-3">Topic</th>
                       <th className="py-2 pr-3">Durum</th>
@@ -146,7 +146,7 @@ export default async function SettingsPage() {
                   <tbody>
                     {snapshot.webhookEvents.map((event) => (
                       <tr
-                        className="border-b border-[#eef0ea] align-top last:border-0"
+                        className="border-b border-[var(--border-table)] align-top last:border-0"
                         key={event.id}
                       >
                         <td className="py-3 pr-3 font-mono text-xs">
@@ -164,7 +164,7 @@ export default async function SettingsPage() {
                         <td className="max-w-[220px] truncate py-3 pr-3 font-mono text-xs">
                           {event.externalId ?? "-"}
                         </td>
-                        <td className="max-w-[260px] py-3 text-[#8a3a28]">
+                        <td className="max-w-[260px] py-3 text-[var(--accent-danger-text)]">
                           {event.error ?? "-"}
                         </td>
                       </tr>
@@ -181,8 +181,8 @@ export default async function SettingsPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[860px] text-left text-sm">
-                  <thead className="text-xs uppercase text-[#6a746f]">
-                    <tr className="border-b border-[#e3e5dd]">
+                  <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                    <tr className="border-b border-[var(--border-subtle)]">
                       <th className="py-2 pr-3">Kanal</th>
                       <th className="py-2 pr-3">Provider</th>
                       <th className="py-2 pr-3">Durum</th>
@@ -193,7 +193,7 @@ export default async function SettingsPage() {
                   <tbody>
                     {snapshot.notificationDeliveries.map((delivery) => (
                       <tr
-                        className="border-b border-[#eef0ea] align-top last:border-0"
+                        className="border-b border-[var(--border-table)] align-top last:border-0"
                         key={delivery.id}
                       >
                         <td className="py-3 pr-3 font-mono text-xs">
@@ -224,8 +224,8 @@ export default async function SettingsPage() {
           <Panel title="Rol matrisi">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="text-xs uppercase text-[#6a746f]">
-                  <tr className="border-b border-[#e3e5dd]">
+                <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                  <tr className="border-b border-[var(--border-subtle)]">
                     <th className="py-2 pr-3">Rol</th>
                     {Object.values(permissionLabels).map((label) => (
                       <th className="py-2 pr-3" key={label}>
@@ -237,7 +237,7 @@ export default async function SettingsPage() {
                 <tbody>
                   {(Object.keys(rolePermissions) as Role[]).map((role) => (
                     <tr
-                      className="border-b border-[#eef0ea] last:border-0"
+                      className="border-b border-[var(--border-table)] last:border-0"
                       key={role}
                     >
                       <td className="py-3 pr-3 font-medium">
@@ -265,27 +265,27 @@ export default async function SettingsPage() {
         <Panel title="İşletme">
           <dl className="grid gap-4 text-sm">
             <div>
-              <dt className="text-[#66706b]">İşletme</dt>
+              <dt className="text-[var(--text-secondary)]">İşletme</dt>
               <dd className="mt-1 font-medium">{snapshot.organization.name}</dd>
             </div>
             <div>
-              <dt className="text-[#66706b]">Slug</dt>
+              <dt className="text-[var(--text-secondary)]">Slug</dt>
               <dd className="mt-1 font-mono text-xs">
                 {snapshot.organization.slug}
               </dd>
             </div>
             <div>
-              <dt className="text-[#66706b]">Aktif kullanıcı</dt>
+              <dt className="text-[var(--text-secondary)]">Aktif kullanıcı</dt>
               <dd className="mt-1 font-medium">{snapshot.user.name}</dd>
             </div>
             <div>
-              <dt className="text-[#66706b]">Rol</dt>
+              <dt className="text-[var(--text-secondary)]">Rol</dt>
               <dd className="mt-1">
                 <StatusBadge tone="success">{roleLabels[snapshot.role]}</StatusBadge>
               </dd>
             </div>
             <div>
-              <dt className="text-[#66706b]">Varsayılan depo</dt>
+              <dt className="text-[var(--text-secondary)]">Varsayılan depo</dt>
               <dd className="mt-1 font-medium">
                 {snapshot.warehouses.find((warehouse) => warehouse.isDefault)
                   ?.name ?? "-"}

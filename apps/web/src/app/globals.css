@@ -1,20 +1,136 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f7f7f2;
-  --foreground: #1f2523;
+/* ── Light Theme (default) ── */
+:root,
+[data-theme="light"] {
+  --bg-primary: #f7f7f2;
+  --bg-secondary: #fbfbf6;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: #f1f4ee;
+  --bg-hover-nav: #edf1e8;
+  --bg-header: rgba(253, 253, 248, 0.9);
+  --bg-empty: #fafbf7;
+  --border-primary: #deded2;
+  --border-secondary: #d8dbd2;
+  --border-input: #cfd3c8;
+  --border-subtle: #e3e5dd;
+  --border-table: #eef0ea;
+  --border-dashed: #d5d8cf;
+  --text-primary: #1f2523;
+  --text-heading: #1c2420;
+  --text-secondary: #66706b;
+  --text-muted: #65706b;
+  --text-nav: #42504a;
+  --text-nav-hover: #17211d;
+  --text-tag: #4d5753;
+  --text-panel-heading: #26302c;
+  --text-body: #27322e;
+  --accent-primary: #236d5a;
+  --accent-primary-hover: #195845;
+  --accent-secondary: #3d7b66;
+  --accent-ring: rgba(61, 123, 102, 0.15);
+  --accent-success-bg: #e0f2e9;
+  --accent-success-text: #1f7a4d;
+  --accent-success-bg2: #dff3e8;
+  --accent-success-text2: #177347;
+  --accent-warning-bg: #fff2c9;
+  --accent-warning-text: #916800;
+  --accent-warning-bg2: #fff0bf;
+  --accent-warning-text2: #866100;
+  --accent-danger-bg: #ffe5df;
+  --accent-danger-text: #a43c25;
+  --accent-danger-bg2: #ffe1d9;
+  --accent-danger-text2: #a23922;
+  --accent-info-bg: #e9eef0;
+  --accent-info-text: #3b5f6f;
+  --neutral-badge-bg: #eef0ec;
+  --neutral-badge-text: #52605a;
+  --placeholder: #8a938e;
+  --selection-bg: #b9dfd1;
+  --selection-text: #12221c;
+  --progress-bg: #e5e7e0;
+  --link: #236d5a;
+  --chart-1: #236d5a;
+  --chart-2: #22c55e;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #06b6d4;
+  --chart-6: #8b5cf6;
+  --chart-7: #ec4899;
+  --chart-8: #14b8a6;
+}
+
+/* ── Dark Theme ── */
+[data-theme="dark"] {
+  --bg-primary: #0f1412;
+  --bg-secondary: #161c19;
+  --bg-card: #1a2320;
+  --bg-input: #1e2724;
+  --bg-hover: #222e2a;
+  --bg-hover-nav: #1e2926;
+  --bg-header: rgba(22, 28, 25, 0.9);
+  --bg-empty: #161c19;
+  --border-primary: #2a3530;
+  --border-secondary: #2a3530;
+  --border-input: #344039;
+  --border-subtle: #263230;
+  --border-table: #1e2926;
+  --border-dashed: #2a3530;
+  --text-primary: #e0e6e2;
+  --text-heading: #eaf0ec;
+  --text-secondary: #8a958f;
+  --text-muted: #7e8a84;
+  --text-nav: #9ca8a2;
+  --text-nav-hover: #d5ddd8;
+  --text-tag: #9ca8a2;
+  --text-panel-heading: #d5ddd8;
+  --text-body: #c5cec9;
+  --accent-primary: #4dbd99;
+  --accent-primary-hover: #3da882;
+  --accent-secondary: #5cc9a4;
+  --accent-ring: rgba(77, 189, 153, 0.2);
+  --accent-success-bg: #132a1e;
+  --accent-success-text: #5bc992;
+  --accent-success-bg2: #132a1e;
+  --accent-success-text2: #4ebe88;
+  --accent-warning-bg: #2a2410;
+  --accent-warning-text: #e0b840;
+  --accent-warning-bg2: #2a2410;
+  --accent-warning-text2: #d4a830;
+  --accent-danger-bg: #2e1710;
+  --accent-danger-text: #f0836a;
+  --accent-danger-bg2: #2e1710;
+  --accent-danger-text2: #e07060;
+  --accent-info-bg: #142028;
+  --accent-info-text: #6aa8c0;
+  --neutral-badge-bg: #222e2a;
+  --neutral-badge-text: #9ca8a2;
+  --placeholder: #5e6a64;
+  --selection-bg: #1a4038;
+  --selection-text: #c5f0e0;
+  --progress-bg: #263230;
+  --link: #4dbd99;
+  --chart-1: #4dbd99;
+  --chart-2: #4ade80;
+  --chart-3: #fbbf24;
+  --chart-4: #f87171;
+  --chart-5: #22d3ee;
+  --chart-6: #a78bfa;
+  --chart-7: #f472b6;
+  --chart-8: #2dd4bf;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
   --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 button,
@@ -24,6 +140,6 @@ select {
 }
 
 ::selection {
-  background: #b9dfd1;
-  color: #12221c;
+  background: var(--selection-bg);
+  color: var(--selection-text);
 }

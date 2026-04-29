@@ -93,7 +93,7 @@ export function UserRoleUpdateDisclosure({
         <Pencil aria-hidden="true" className="size-4" />
         Rol
       </summary>
-      <div className="mt-3 rounded-md border border-[#e3e5dd] bg-[#fafbf7] p-3">
+      <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-empty)] p-3">
         <ActionForm action={updateUserRoleAction} resetOnSuccess={false}>
           {(pending) => (
             <>
@@ -153,7 +153,7 @@ export function UserDeleteForm({
           <input name="membershipId" type="hidden" value={member.id} />
           <button
             className={clsx(
-              "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[#e8c4bc] bg-white px-3 text-sm font-semibold text-[#9a301c] transition hover:bg-[#fff5f3]",
+              "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[var(--accent-danger-bg)] bg-[var(--bg-card)] px-3 text-sm font-semibold text-[var(--accent-danger-text)] transition hover:bg-[var(--accent-danger-bg)]",
               pending && "cursor-wait opacity-70",
             )}
             disabled={pending}

@@ -47,7 +47,7 @@ export function VariantManager({
         <Layers aria-hidden="true" className="size-4" />
         Varyantlar ({productVariants.length})
       </summary>
-      <div className="mt-3 grid gap-4 rounded-md border border-[#e3e5dd] bg-[#fafbf7] p-4">
+      <div className="mt-3 grid gap-4 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-empty)] p-4">
         <VariantCreateForm productId={product.id} />
 
         {productVariants.length === 0 ? (
@@ -55,8 +55,8 @@ export function VariantManager({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="text-xs uppercase text-[#6a746f]">
-                <tr className="border-b border-[#e3e5dd]">
+              <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                <tr className="border-b border-[var(--border-subtle)]">
                   <th className="py-2 pr-3">SKU</th>
                   <th className="py-2 pr-3">Ad</th>
                   <th className="py-2 pr-3">Özellikler</th>
@@ -68,14 +68,14 @@ export function VariantManager({
               <tbody>
                 {productVariants.map((variant) => (
                   <tr
-                    className="border-b border-[#eef0ea] align-top last:border-0"
+                    className="border-b border-[var(--border-table)] align-top last:border-0"
                     key={variant.id}
                   >
                     <td className="py-3 pr-3 font-mono text-xs">
                       {variant.sku}
                     </td>
                     <td className="py-3 pr-3 font-medium">{variant.name}</td>
-                    <td className="py-3 pr-3 text-xs text-[#52605a]">
+                    <td className="py-3 pr-3 text-xs text-[var(--neutral-badge-text)]">
                       {attributesPreview(variant.attributes)}
                     </td>
                     <td className="py-3 pr-3">
@@ -200,7 +200,7 @@ function VariantUpdateDisclosure({ variant }: { variant: ProductVariant }) {
         <Pencil aria-hidden="true" className="size-4" />
         Düzenle
       </summary>
-      <div className="mt-3 rounded-md border border-[#e3e5dd] bg-white p-3">
+      <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
         <VariantUpdateForm variant={variant} />
       </div>
     </details>

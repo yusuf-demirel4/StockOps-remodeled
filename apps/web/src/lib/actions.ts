@@ -40,6 +40,7 @@ function refresh() {
   revalidatePath("/");
   revalidatePath("/products");
   revalidatePath("/inventory");
+  revalidatePath("/manufacturing");
   revalidatePath("/orders");
   revalidatePath("/suppliers");
   revalidatePath("/users");
@@ -534,6 +535,108 @@ export async function deliverOrderAction(
   return runMutation("Sipariş teslim edildi.", (context) =>
     import("@/lib/repository").then((m) =>
       m.deliverOrder(value(formData, "orderId"), context)
+    )
+  );
+}
+
+// ── BOM + Manufacturing ──
+
+export async function createBomAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  const componentProductIds = formData.getAll("componentProductId") as string[];
+  const quantities = formData.getAll("componentQuantity") as string[];
+
+  const components = componentProductIds
+    .map((productId, i) => ({
+      componentProductId: productId,
+      quantity: quantities[i],
+      sortOrder: i,
+    }))
+    .filter((c) => c.componentProductId && Number(c.quantity) > 0);
+
+  return runMutation("Ürün reçetesi oluşturuldu.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.createBom(
+        {
+          productId: value(formData, "productId"),
+          name: value(formData, "name"),
+          description: value(formData, "description"),
+          components,
+        },
+        context,
+      )
+    )
+  );
+}
+
+export async function updateBomAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  const componentProductIds = formData.getAll("componentProductId") as string[];
+  const quantities = formData.getAll("componentQuantity") as string[];
+
+  const components = componentProductIds
+    .map((productId, i) => ({
+      componentProductId: productId,
+      quantity: quantities[i],
+      sortOrder: i,
+    }))
+    .filter((c) => c.componentProductId && Number(c.quantity) > 0);
+
+  return runMutation("Reçete güncellendi.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.updateBom(
+        value(formData, "bomId"),
+        {
+          name: value(formData, "name") || undefined,
+          description: value(formData, "description"),
+          components: components.length > 0 ? components : undefined,
+        },
+        context,
+      )
+    )
+  );
+}
+
+export async function createManufacturingOrderAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Üretim emri oluşturuldu.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.createManufacturingOrder(
+        {
+          bomId: value(formData, "bomId"),
+          warehouseId: value(formData, "warehouseId"),
+          quantity: value(formData, "quantity"),
+        },
+        context,
+      )
+    )
+  );
+}
+
+export async function startManufacturingOrderAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Üretim başlatıldı, hammaddeler tüketildi.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.startManufacturingOrder(value(formData, "moId"), context)
+    )
+  );
+}
+
+export async function completeManufacturingOrderAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Üretim tamamlandı, mamul stoka eklendi.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.completeManufacturingOrder(value(formData, "moId"), context)
     )
   );
 }

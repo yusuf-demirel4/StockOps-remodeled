@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #f8f9fa;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: #f1f3f5;
+  --border-primary: #dee2e6;
+  --border-input: #ced4da;
+  --border-subtle: #e9ecef;
+  --border-table: #f1f3f5;
+  --text-primary: #212529;
+  --text-secondary: #6c757d;
+  --text-muted: #868e96;
+  --placeholder: #adb5bd;
+  --accent-primary: var(--brand-primary, #236d5a);
+  --accent-primary-hover: var(--brand-primary-hover, #195845);
+  --accent-ring: rgba(35, 109, 90, 0.15);
+  --accent-success-bg: #d3f9d8;
+  --accent-success-text: #2b8a3e;
+  --accent-danger-bg: #ffe3e3;
+  --accent-danger-text: #c92a2a;
+  --accent-warning-bg: #fff3bf;
+  --accent-warning-text: #e67700;
+  --neutral-badge-bg: #e9ecef;
+  --neutral-badge-text: #495057;
+
+  --brand-primary: #236d5a;
+  --brand-primary-hover: #195845;
+  --brand-accent: #3d7b66;
+}
+
+@theme inline {
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}

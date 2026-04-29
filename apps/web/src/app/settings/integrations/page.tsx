@@ -61,7 +61,7 @@ export default async function IntegrationsPage() {
         <div className="flex items-center justify-between">
           <div />
           <Link
-            className="inline-flex items-center gap-2 rounded-md border border-[#cfd3c8] bg-white px-3 py-2 text-sm font-medium text-[#42504a] transition hover:bg-[#f1f4ee]"
+            className="inline-flex items-center gap-2 rounded-md border border-[var(--border-input)] bg-[var(--bg-card)] px-3 py-2 text-sm font-medium text-[var(--text-nav)] transition hover:bg-[var(--bg-hover)]"
             href="/settings/integrations/sync-log"
           >
             <ExternalLink className="size-4" />
@@ -85,11 +85,11 @@ export default async function IntegrationsPage() {
               <Panel key={integration.id} title={integration.name}>
                 <div className="space-y-4">
                   <div className="flex items-start gap-3">
-                    <span className="rounded-md bg-[#e9eef0] p-2 text-[#3b5f6f]">
+                    <span className="rounded-md bg-[var(--accent-info-bg)] p-2 text-[var(--accent-info-text)]">
                       <Icon className="size-5" />
                     </span>
                     <div className="flex-1">
-                      <p className="text-sm text-[#66706b]">
+                      <p className="text-sm text-[var(--text-secondary)]">
                         {integration.description}
                       </p>
                     </div>
@@ -100,23 +100,23 @@ export default async function IntegrationsPage() {
                       {webhookCount > 0 ? "Aktif" : "Bağlı değil"}
                     </StatusBadge>
                     {lastEvent && (
-                      <span className="text-xs text-[#8a938e]">
+                      <span className="text-xs text-[var(--placeholder)]">
                         Son: {new Date(lastEvent.receivedAt).toLocaleString("tr-TR")}
                       </span>
                     )}
                   </div>
 
                   <div>
-                    <p className="mb-2 text-xs font-semibold uppercase text-[#6a746f]">
+                    <p className="mb-2 text-xs font-semibold uppercase text-[var(--text-secondary)]">
                       Ozellikler
                     </p>
                     <ul className="space-y-1">
                       {integration.features.map((feature) => (
                         <li
-                          className="flex items-center gap-2 text-sm text-[#42504a]"
+                          className="flex items-center gap-2 text-sm text-[var(--text-nav)]"
                           key={feature}
                         >
-                          <span className="size-1.5 rounded-full bg-[#3d7b66]" />
+                          <span className="size-1.5 rounded-full bg-[var(--accent-secondary)]" />
                           {feature}
                         </li>
                       ))}
@@ -124,7 +124,7 @@ export default async function IntegrationsPage() {
                   </div>
 
                   <Link
-                    className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#236d5a] px-4 text-sm font-semibold text-white transition hover:bg-[#195845]"
+                    className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[var(--accent-primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-primary-hover)]"
                     href={integration.href}
                   >
                     Yapılandır
@@ -160,13 +160,13 @@ export default async function IntegrationsPage() {
               },
             ].map((feature) => (
               <div
-                className="rounded-md border border-[#e3e5dd] bg-[#fafbf7] p-3"
+                className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-empty)] p-3"
                 key={feature.title}
               >
-                <p className="text-sm font-semibold text-[#26302c]">
+                <p className="text-sm font-semibold text-[var(--text-panel-heading)]">
                   {feature.title}
                 </p>
-                <p className="mt-1 text-xs text-[#66706b]">
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">
                   {feature.description}
                 </p>
               </div>
