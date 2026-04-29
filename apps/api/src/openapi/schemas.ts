@@ -694,3 +694,58 @@ export const invoiceCreateBodySchema: SchemaObject = {
     },
   },
 };
+
+export const forecastResultSchema: SchemaObject = {
+  type: "object",
+  required: ["method", "history", "forecast", "parameters"],
+  properties: {
+    productId: id("prd_001"),
+    productName: { type: "string", example: "Çelik Hasır 100x200" },
+    productSku: { type: "string", example: "STL-001" },
+    method: {
+      type: "string",
+      enum: ["MOVING_AVG", "EXPONENTIAL_SMOOTHING", "HOLT_WINTERS"],
+      example: "HOLT_WINTERS",
+    },
+    historyDays: { type: "integer", example: 90 },
+    history: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["date", "value"],
+        properties: {
+          date: { type: "string", example: "2026-04-25" },
+          value: { type: "number", example: 12 },
+        },
+      },
+    },
+    forecast: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["date", "value", "lower", "upper"],
+        properties: {
+          date: { type: "string", example: "2026-04-26" },
+          value: { type: "number", example: 13.4 },
+          lower: { type: "number", example: 9.1 },
+          upper: { type: "number", example: 17.7 },
+        },
+      },
+    },
+    metrics: {
+      type: "object",
+      nullable: true,
+      properties: {
+        mae: { type: "number", example: 1.42 },
+        rmse: { type: "number", example: 1.85 },
+        mape: { type: "number", nullable: true, example: 8.7 },
+        sampleSize: { type: "integer", example: 60 },
+      },
+    },
+    parameters: {
+      type: "object",
+      additionalProperties: { type: "number" },
+      example: { alpha: 0.4, beta: 0.1, gamma: 0.2, seasonLength: 7 },
+    },
+  },
+};
