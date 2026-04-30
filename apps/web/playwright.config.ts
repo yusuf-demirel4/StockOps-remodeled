@@ -41,9 +41,14 @@ export default defineConfig({
           },
         }
       : {
-          command: "npm run dev",
+          command: "npm run build && npm run start",
           url: "http://localhost:3000",
-          reuseExistingServer: true,
-          timeout: 30_000,
+          reuseExistingServer: false,
+          timeout: 180_000,
+          env: {
+            APP_DATA_SOURCE: "demo",
+            NEXT_TELEMETRY_DISABLED: "1",
+            PORT: "3000",
+          },
         },
 });
