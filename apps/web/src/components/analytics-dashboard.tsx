@@ -86,6 +86,7 @@ function useAnalyticsData(snapshot: AppSnapshot) {
       .slice(0, 8);
 
     // Daily movement trend (last 30 days)
+    // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
     const dailyMap = new Map<string, { inbound: number; outbound: number }>();

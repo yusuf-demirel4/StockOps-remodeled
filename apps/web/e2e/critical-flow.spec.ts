@@ -17,8 +17,6 @@ test.describe.configure({ mode: "serial" });
 
 // Paylaşılan state — test adımları arasında kullanılır
 let createdProductName: string;
-let createdOrderUrl: string;
-let createdInvoiceUrl: string;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Yardımcı: Sayfa yüklendikten sonra hata olup olmadığını kontrol et
@@ -182,7 +180,6 @@ test("Adım 5 — Confirm Order: DRAFT sipariş detayı açılır", async ({
     if (await link.isVisible()) {
       await link.click();
       await page.waitForURL(/\/orders\/[^/]+/, { timeout: 5_000 });
-      createdOrderUrl = page.url();
       await assertNoError(page);
     }
   }
@@ -237,7 +234,7 @@ test("Adım 6 — Invoice: Fatura detayı açılır ve tutar görünür", async 
   if (await link.isVisible()) {
     await link.click();
     await page.waitForURL(/\/invoices\/[^/]+/, { timeout: 5_000 });
-    createdInvoiceUrl = page.url();
+    // createdInvoiceUrl = page.url();
 
     await assertNoError(page);
 

@@ -4,7 +4,6 @@ import { requireAuth } from "@/lib/auth";
 import { getDataSourceMode } from "@/lib/data-source";
 import { getPrisma } from "@/lib/prisma";
 import type { Customer } from "@stockops/core/types";
-import { getDemoSnapshot } from "@/lib/demo-store";
 
 export const dynamic = "force-dynamic";
 

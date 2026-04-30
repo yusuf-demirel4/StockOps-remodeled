@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Check, Camera, Box } from "lucide-react";
 import { useBarcodeScanner } from "@/components/barcode-scanner";
 import { ActionForm, submitClass } from "@/components/action-form";
