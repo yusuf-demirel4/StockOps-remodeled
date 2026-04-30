@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Controller,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -135,7 +136,7 @@ export class ExtensionsController {
         (item) => item.id === id && item.organizationId === context.organization.id,
       );
       if (!subscription) {
-        throw new Error("Webhook subscription not found.");
+        throw new NotFoundException("Webhook subscription not found.");
       }
       subscription.url = parsed.url ?? subscription.url;
       subscription.events = parsed.events ?? subscription.events;
@@ -146,8 +147,17 @@ export class ExtensionsController {
       return subscription;
     }
 
-    const row = await (getPrisma() as any).extensionWebhookSubscription.update({
-      where: { id },
+    const prisma = getPrisma() as any;
+    const existing = await prisma.extensionWebhookSubscription.findFirst({
+      where: { id, organizationId: context.organization.id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException("Webhook subscription not found.");
+    }
+
+    const row = await prisma.extensionWebhookSubscription.update({
+      where: { id: existing.id },
       data: {
         url: parsed.url,
         events: parsed.events,

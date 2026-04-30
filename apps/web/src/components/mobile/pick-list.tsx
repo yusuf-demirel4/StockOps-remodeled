@@ -1,7 +1,7 @@
 "use client";
 
-import { CheckCircle2, Loader2, PackageCheck, Play } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { CheckCircle2, Loader2, PackageCheck, Play, RotateCcw } from "lucide-react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -9,6 +9,7 @@ import {
   startPickingAction,
   updatePickListItemAction,
 } from "@/lib/actions";
+import { enqueue, listQueue, removeFromQueue } from "@/lib/offline-queue";
 import type { SalesOrder } from "@stockops/core/types";
 
 import { MobileScanInput } from "./scan-input";
@@ -47,18 +48,46 @@ type Toast =
   | { kind: "error"; message: string }
   | null;
 
+type QueuedPickStart = {
+  orderId: string;
+};
+
+type QueuedPickUpdate = {
+  pickListId: string;
+  itemId: string;
+  pickedQty: number;
+};
+
+type QueuedPickPack = {
+  orderId: string;
+};
+
+const pickQueueKinds = new Set(["pick-start", "pick-update", "pick-pack"]);
+const idleState = { actionId: 0, message: "", status: "idle" as const };
+
 export function MobilePickList({ confirmedOrders, pickingJobs }: Props) {
   const router = useRouter();
   const [activeJobId, setActiveJobId] = useState(pickingJobs[0]?.pickListId ?? "");
   const [activeItemId, setActiveItemId] = useState("");
   const [drafts, setDrafts] = useState<Record<string, number>>({});
   const [toast, setToast] = useState<Toast>(null);
+  const [queueCount, setQueueCount] = useState(0);
   const [isPending, startTransition] = useTransition();
 
   const activeJob = useMemo(
     () => pickingJobs.find((job) => job.pickListId === activeJobId) ?? pickingJobs[0],
     [activeJobId, pickingJobs],
   );
+
+  const refreshQueueCount = async () => {
+    const items = await listQueue();
+    setQueueCount(items.filter((item) => pickQueueKinds.has(item.kind)).length);
+  };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshQueueCount();
+  }, []);
 
   const onScan = (value: string) => {
     if (!activeJob) {
@@ -90,7 +119,7 @@ export function MobilePickList({ confirmedOrders, pickingJobs }: Props) {
     action: (state: import("@/lib/action-state").ActionState, data: FormData) => Promise<import("@/lib/action-state").ActionState>,
     formData: FormData,
   ) => {
-    const result = await action({ actionId: 0, message: "", status: "idle" }, formData);
+    const result = await action(idleState, formData);
     setToast({
       kind: result.status === "success" ? "success" : "error",
       message: result.message,
@@ -98,26 +127,107 @@ export function MobilePickList({ confirmedOrders, pickingJobs }: Props) {
     if (result.status === "success") {
       router.refresh();
     }
+    return result.status === "success";
+  };
+
+  const syncQueue = async () => {
+    if (!navigator.onLine) return;
+    const items = (await listQueue()).filter((item) =>
+      pickQueueKinds.has(item.kind),
+    );
+
+    for (const item of items) {
+      const formData = new FormData();
+      let ok = false;
+
+      if (item.kind === "pick-start") {
+        const payload = item.payload as QueuedPickStart;
+        formData.set("orderId", payload.orderId);
+        ok = await runAction(startPickingAction, formData);
+      } else if (item.kind === "pick-update") {
+        const payload = item.payload as QueuedPickUpdate;
+        formData.set("pickListId", payload.pickListId);
+        formData.set("itemId", payload.itemId);
+        formData.set("pickedQty", String(payload.pickedQty));
+        ok = await runAction(updatePickListItemAction, formData);
+      } else if (item.kind === "pick-pack") {
+        const payload = item.payload as QueuedPickPack;
+        formData.set("orderId", payload.orderId);
+        ok = await runAction(markPackedAction, formData);
+      }
+
+      if (ok) {
+        await removeFromQueue(item.id);
+      } else {
+        break;
+      }
+    }
+
+    await refreshQueueCount();
+  };
+
+  useEffect(() => {
+    const sync = () => {
+      void syncQueue();
+    };
+    window.addEventListener("online", sync);
+    return () => window.removeEventListener("online", sync);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const queuePickAction = async (kind: string, payload: unknown) => {
+    await enqueue(kind, payload);
+    await refreshQueueCount();
+    setToast({ kind: "success", message: "Cevrimdisi islem kuyruga alindi." });
   };
 
   const startOrder = (orderId: string) => {
     const formData = new FormData();
     formData.set("orderId", orderId);
-    startTransition(() => void runAction(startPickingAction, formData));
+    startTransition(() => {
+      void (async () => {
+        if (!navigator.onLine) {
+          await queuePickAction("pick-start", { orderId });
+          return;
+        }
+        await runAction(startPickingAction, formData);
+      })();
+    });
   };
 
   const saveItem = (item: PickItem) => {
+    const pickedQty = drafts[item.id] ?? item.pickedQty;
     const formData = new FormData();
     formData.set("pickListId", item.pickListId);
     formData.set("itemId", item.id);
-    formData.set("pickedQty", String(drafts[item.id] ?? item.pickedQty));
-    startTransition(() => void runAction(updatePickListItemAction, formData));
+    formData.set("pickedQty", String(pickedQty));
+    startTransition(() => {
+      void (async () => {
+        if (!navigator.onLine) {
+          await queuePickAction("pick-update", {
+            pickListId: item.pickListId,
+            itemId: item.id,
+            pickedQty,
+          });
+          return;
+        }
+        await runAction(updatePickListItemAction, formData);
+      })();
+    });
   };
 
   const packOrder = (orderId: string) => {
     const formData = new FormData();
     formData.set("orderId", orderId);
-    startTransition(() => void runAction(markPackedAction, formData));
+    startTransition(() => {
+      void (async () => {
+        if (!navigator.onLine) {
+          await queuePickAction("pick-pack", { orderId });
+          return;
+        }
+        await runAction(markPackedAction, formData);
+      })();
+    });
   };
 
   return (
@@ -140,6 +250,16 @@ export function MobilePickList({ confirmedOrders, pickingJobs }: Props) {
           {toast.message}
         </div>
       )}
+
+      <button
+        className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 px-4 py-3 text-sm text-slate-200 disabled:opacity-50"
+        disabled={isPending || queueCount === 0}
+        onClick={() => startTransition(() => void syncQueue())}
+        type="button"
+      >
+        <RotateCcw aria-hidden="true" className="size-4" />
+        Kuyrugu senkronize et ({queueCount})
+      </button>
 
       {confirmedOrders.length > 0 && (
         <section className="grid gap-2">

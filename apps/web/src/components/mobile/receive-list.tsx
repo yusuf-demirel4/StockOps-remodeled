@@ -1,9 +1,11 @@
 "use client";
 
-import { CheckCircle2, ChevronRight, Loader2 } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { CheckCircle2, ChevronRight, Loader2, RotateCcw } from "lucide-react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { receivePurchaseOrderAction } from "@/lib/actions";
+import { enqueue, listQueue, removeFromQueue } from "@/lib/offline-queue";
 import { findProductByScannedValue } from "@stockops/core/barcode";
 import type { Product, PurchaseOrder, Supplier } from "@stockops/core/types";
 
@@ -20,9 +22,17 @@ type ToastState =
   | { kind: "error"; message: string }
   | null;
 
+type QueuedReceive = {
+  orderId: string;
+};
+
+const idleState = { actionId: 0, message: "", status: "idle" as const };
+
 export function ReceiveList({ orders, products, suppliers }: Props) {
+  const router = useRouter();
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
+  const [queueCount, setQueueCount] = useState(0);
   const [isPending, startTransition] = useTransition();
 
   const productMap = useMemo(() => {
@@ -38,6 +48,59 @@ export function ReceiveList({ orders, products, suppliers }: Props) {
   }, [suppliers]);
 
   const activeOrder = orders.find((order) => order.id === activeOrderId);
+
+  const refreshQueueCount = async () => {
+    const items = await listQueue();
+    setQueueCount(items.filter((item) => item.kind === "receive-purchase-order").length);
+  };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshQueueCount();
+  }, []);
+
+  const submitPayload = async (payload: QueuedReceive) => {
+    const formData = new FormData();
+    formData.set("orderId", payload.orderId);
+    const result = await receivePurchaseOrderAction(idleState, formData);
+    setToast({
+      kind: result.status === "success" ? "success" : "error",
+      message: result.message,
+    });
+    if (result.status === "success") {
+      setActiveOrderId(null);
+      router.refresh();
+    }
+    return result.status === "success";
+  };
+
+  const syncQueue = async () => {
+    if (!navigator.onLine) return;
+    const items = await listQueue();
+    const receiveItems = items.filter(
+      (item) => item.kind === "receive-purchase-order",
+    );
+
+    for (const item of receiveItems) {
+      const ok = await submitPayload(item.payload as QueuedReceive);
+      if (ok) {
+        await removeFromQueue(item.id);
+      } else {
+        break;
+      }
+    }
+
+    await refreshQueueCount();
+  };
+
+  useEffect(() => {
+    const sync = () => {
+      void syncQueue();
+    };
+    window.addEventListener("online", sync);
+    return () => window.removeEventListener("online", sync);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onScan = (value: string) => {
     const product = findProductByScannedValue(products, value);
@@ -63,19 +126,18 @@ export function ReceiveList({ orders, products, suppliers }: Props) {
   };
 
   const submitReceive = (orderId: string) => {
-    const formData = new FormData();
-    formData.set("orderId", orderId);
     startTransition(async () => {
-      const result = await receivePurchaseOrderAction(
-        { actionId: 0, message: "", status: "idle" },
-        formData,
-      );
-      if (result.status === "success") {
-        setToast({ kind: "success", message: result.message });
+      const payload = { orderId };
+
+      if (!navigator.onLine) {
+        await enqueue("receive-purchase-order", payload);
+        await refreshQueueCount();
+        setToast({ kind: "success", message: "Cevrimdisi teslim kuyruga alindi." });
         setActiveOrderId(null);
-      } else {
-        setToast({ kind: "error", message: result.message });
+        return;
       }
+
+      await submitPayload(payload);
     });
   };
 
@@ -205,6 +267,16 @@ export function ReceiveList({ orders, products, suppliers }: Props) {
           )}
         </div>
       )}
+
+      <button
+        className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 px-4 py-3 text-sm text-slate-200 disabled:opacity-50"
+        disabled={isPending || queueCount === 0}
+        onClick={() => startTransition(() => void syncQueue())}
+        type="button"
+      >
+        <RotateCcw aria-hidden="true" className="size-4" />
+        Kuyrugu senkronize et ({queueCount})
+      </button>
     </div>
   );
 }

@@ -1,12 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { can } from "@stockops/core/inventory";
 import { getDataSourceMode } from "@/lib/data-source";
-import { globalPluginManager } from "@stockops/core/extensions";
+import {
+  globalPluginManager,
+  signWebhookPayload,
+} from "@stockops/core/extensions";
 import type { SuggestedPurchaseOrder } from "@stockops/core/forecast";
 import {
   completeManufacturingOrder as completeDemoMo,
   confirmSalesOrder as confirmDemoSalesOrder,
   createBom as createDemoBom,
+  createCustomer as createDemoCustomer,
+  createInvoice as createDemoInvoice,
   createManufacturingOrder as createDemoMo,
   createProduct as createDemoProduct,
   createPurchaseOrder as createDemoPurchaseOrder,
@@ -18,6 +23,8 @@ import {
   createUser as createDemoUser,
   createWarehouse as createDemoWarehouse,
   deleteUser as deleteDemoUser,
+  getDemoCustomers,
+  getDemoInvoices,
   getDemoSnapshot,
   receivePurchaseOrder as receiveDemoPurchaseOrder,
   recordStocktakeCount as recordDemoStocktakeCount,
@@ -36,9 +43,11 @@ import { getPrisma } from "@/lib/prisma";
 import {
   bomInputSchema,
   bomUpdateInputSchema,
+  customerInputSchema,
   manufacturingOrderInputSchema,
   customFieldInputSchema,
   exchangeRateQuerySchema,
+  invoiceInputSchema,
   organizationSettingsInputSchema,
   productInputSchema,
   productUpdateInputSchema,
@@ -75,6 +84,8 @@ import { hashPassword } from "@stockops/core/password";
 import type {
   AppSnapshot,
   AuthContext,
+  Customer,
+  Invoice,
   Member,
   NotificationDelivery,
   CustomFieldValue,
@@ -119,6 +130,106 @@ function isUniqueConstraintError(error: unknown) {
   return error instanceof Error && error.message.includes("Unique constraint");
 }
 
+const WEBHOOK_TIMEOUT_MS = 8000;
+
+function dispatchExtensionEvent(
+  context: AuthContext,
+  eventName: ExtensionEventName,
+  data: unknown,
+) {
+  void globalPluginManager.dispatch(eventName, data).catch(console.error);
+
+  if (dbMode()) {
+    void deliverExtensionWebhooks(context, eventName, data).catch((error) => {
+      console.error("[ExtensionWebhooks] Delivery dispatch failed:", error);
+    });
+  }
+}
+
+async function deliverExtensionWebhooks(
+  context: AuthContext,
+  eventName: ExtensionEventName,
+  data: unknown,
+) {
+  const prisma = getPrisma() as any;
+  const rows =
+    (await prisma.extensionWebhookSubscription?.findMany?.({
+      where: {
+        organizationId: context.organization.id,
+        status: "ACTIVE",
+      },
+    })) ?? [];
+
+  const subscriptions: ExtensionWebhookSubscription[] = rows
+    .map((item: any) => mapWebhookSubscription(item))
+    .filter((subscription: ExtensionWebhookSubscription) =>
+      subscription.events.includes(eventName),
+    );
+
+  if (subscriptions.length === 0) {
+    return;
+  }
+
+  await Promise.allSettled(
+    subscriptions.map((subscription) =>
+      deliverExtensionWebhook(context, subscription, eventName, data),
+    ),
+  );
+}
+
+async function deliverExtensionWebhook(
+  context: AuthContext,
+  subscription: ExtensionWebhookSubscription,
+  eventName: ExtensionEventName,
+  data: unknown,
+) {
+  const deliveryId = `evt_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const payload = JSON.stringify({
+    id: deliveryId,
+    event: eventName,
+    organizationId: context.organization.id,
+    createdAt: new Date().toISOString(),
+    data,
+  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "User-Agent": "StockOps-Webhooks/1.0",
+    "X-StockOps-Delivery": deliveryId,
+    "X-StockOps-Event": eventName,
+  };
+
+  if (subscription.secret) {
+    headers["X-StockOps-Signature"] = signWebhookPayload(
+      payload,
+      subscription.secret,
+    );
+  }
+
+  try {
+    const response = await fetch(subscription.url, {
+      body: payload,
+      headers,
+      method: "POST",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      console.error(
+        `[ExtensionWebhooks] ${subscription.url} returned ${response.status} for ${eventName}.`,
+      );
+    }
+  } catch (error) {
+    console.error(
+      `[ExtensionWebhooks] Failed to deliver ${eventName} to ${subscription.url}:`,
+      error,
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function mapProduct(product: {
   id: string;
   organizationId: string;
@@ -143,6 +254,86 @@ function mapProduct(product: {
     minimumStock: product.minimumStock,
     isActive: product.isActive,
     unitPrice: product.unitPrice ? Number(product.unitPrice) : 0,
+  };
+}
+
+function mapCustomer(customer: {
+  id: string;
+  organizationId: string;
+  code: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  taxId: string | null;
+  address: string | null;
+  paymentTermDays: number;
+  isActive: boolean;
+}): Customer {
+  return {
+    id: customer.id,
+    organizationId: customer.organizationId,
+    code: customer.code,
+    name: customer.name,
+    email: customer.email ?? undefined,
+    phone: customer.phone ?? undefined,
+    taxId: customer.taxId ?? undefined,
+    address: customer.address ?? undefined,
+    paymentTermDays: customer.paymentTermDays,
+    isActive: customer.isActive,
+  };
+}
+
+function mapInvoice(invoice: {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  code: string;
+  status: string;
+  issuedAt: Date | null;
+  dueDate: Date | null;
+  subtotal: unknown;
+  discountAmount: unknown;
+  taxRate: unknown;
+  taxAmount: unknown;
+  total: unknown;
+  currency: string;
+  notes: string | null;
+  createdAt: Date;
+  lines: Array<{
+    id?: string;
+    productId: string;
+    description: string | null;
+    quantity: number;
+    unitPrice: unknown;
+    discount: unknown;
+    lineTotal: unknown;
+  }>;
+}): Invoice {
+  return {
+    id: invoice.id,
+    organizationId: invoice.organizationId,
+    customerId: invoice.customerId,
+    code: invoice.code,
+    status: invoice.status as Invoice["status"],
+    issuedAt: invoice.issuedAt ? iso(invoice.issuedAt) : undefined,
+    dueDate: invoice.dueDate ? iso(invoice.dueDate) : undefined,
+    subtotal: Number(invoice.subtotal),
+    discountAmount: Number(invoice.discountAmount),
+    taxRate: Number(invoice.taxRate),
+    taxAmount: Number(invoice.taxAmount),
+    total: Number(invoice.total),
+    currency: invoice.currency,
+    notes: invoice.notes ?? undefined,
+    lines: invoice.lines.map((line) => ({
+      id: line.id,
+      productId: line.productId,
+      description: line.description ?? undefined,
+      quantity: line.quantity,
+      unitPrice: Number(line.unitPrice),
+      discount: Number(line.discount),
+      lineTotal: Number(line.lineTotal),
+    })),
+    createdAt: iso(invoice.createdAt),
   };
 }
 
@@ -843,7 +1034,9 @@ async function fetchText(url: string) {
 
 export async function createProduct(input: unknown, context: AuthContext) {
   if (!dbMode()) {
-    return createDemoProduct(input, context);
+    const product = createDemoProduct(input, context);
+    dispatchExtensionEvent(context, "product.updated", product);
+    return product;
   }
 
   ensurePermission(context, "manage_products");
@@ -876,7 +1069,8 @@ export async function createProduct(input: unknown, context: AuthContext) {
     `${parsed.sku} ürünü oluşturuldu`,
   );
 
-  globalPluginManager.dispatch("product.updated", product).catch(console.error);
+  dispatchExtensionEvent(context, "product.updated", product);
+  return product;
 }
 
 export async function updateProduct(
@@ -963,7 +1157,9 @@ export async function setProductActive(
 
 export async function createStockMovement(input: unknown, context: AuthContext) {
   if (!dbMode()) {
-    return createDemoStockMovement(input, context);
+    const movement = createDemoStockMovement(input, context);
+    dispatchExtensionEvent(context, "stock.changed", movement);
+    return movement;
   }
 
   ensurePermission(context, "manage_stock");
@@ -1007,7 +1203,13 @@ export async function createStockMovement(input: unknown, context: AuthContext) 
     `${parsed.type} hareketi kaydedildi`,
   );
 
-  globalPluginManager.dispatch("stock.changed", { productId: parsed.productId, quantityChange }).catch(console.error);
+  dispatchExtensionEvent(context, "stock.changed", {
+    movementId: movement.id,
+    productId: parsed.productId,
+    warehouseId: parsed.warehouseId,
+    quantityChange,
+  });
+  return movement;
 }
 
 export async function createStockTransfer(input: unknown, context: AuthContext) {
@@ -1309,9 +1511,157 @@ export async function updateSupplier(
   );
 }
 
+export async function listCustomers(context: AuthContext) {
+  if (!dbMode()) {
+    return getDemoCustomers(context);
+  }
+
+  const customers = await getPrisma().customer.findMany({
+    where: { organizationId: context.organization.id },
+    orderBy: { name: "asc" },
+  });
+
+  return customers.map(mapCustomer);
+}
+
+export async function createCustomer(input: unknown, context: AuthContext) {
+  if (!dbMode()) {
+    return createDemoCustomer(input, context);
+  }
+
+  ensurePermission(context, "manage_sales");
+  const parsed = customerInputSchema.parse(input);
+  const customer = await getPrisma()
+    .customer.create({
+      data: {
+        organizationId: context.organization.id,
+        code: parsed.code,
+        name: parsed.name,
+        email: parsed.email || null,
+        phone: parsed.phone || null,
+        taxId: parsed.taxId || null,
+        address: parsed.address || null,
+        paymentTermDays: parsed.paymentTermDays,
+      },
+    })
+    .catch((error: unknown) => {
+      if (isUniqueConstraintError(error)) {
+        throw new Error("Bu musteri kodu zaten kayitli.");
+      }
+
+      throw error;
+    });
+
+  await audit(
+    context,
+    "CREATE",
+    "Customer",
+    customer.id,
+    `${customer.name} musterisi olusturuldu`,
+  );
+
+  return mapCustomer(customer);
+}
+
+export async function listInvoices(context: AuthContext) {
+  if (!dbMode()) {
+    return getDemoInvoices(context);
+  }
+
+  const invoices = await getPrisma().invoice.findMany({
+    where: { organizationId: context.organization.id },
+    include: { lines: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return invoices.map(mapInvoice);
+}
+
+export async function createInvoice(input: unknown, context: AuthContext) {
+  if (!dbMode()) {
+    return createDemoInvoice(input, context);
+  }
+
+  ensurePermission(context, "manage_sales");
+  const parsed = invoiceInputSchema.parse(input);
+  const prisma = getPrisma();
+  const customer = await prisma.customer.findFirst({
+    where: {
+      id: parsed.customerId,
+      organizationId: context.organization.id,
+      isActive: true,
+    },
+  });
+
+  if (!customer) {
+    throw new Error("Musteri bulunamadi.");
+  }
+
+  const productIds = [...new Set(parsed.lines.map((line) => line.productId))];
+  const productCount = await prisma.product.count({
+    where: {
+      id: { in: productIds },
+      organizationId: context.organization.id,
+      isActive: true,
+    },
+  });
+
+  if (productCount !== productIds.length) {
+    throw new Error("Urun bulunamadi.");
+  }
+
+  const linesWithTotals = parsed.lines.map((line) => {
+    const discountRate = (line.discount ?? 0) / 100;
+    return {
+      ...line,
+      lineTotal: line.quantity * line.unitPrice * (1 - discountRate),
+    };
+  });
+  const subtotal = linesWithTotals.reduce(
+    (sum, line) => sum + line.lineTotal,
+    0,
+  );
+  const taxAmount = subtotal * parsed.taxRate;
+  const total = subtotal + taxAmount;
+  const count = await prisma.invoice.count({
+    where: { organizationId: context.organization.id },
+  });
+  const invoice = await prisma.invoice.create({
+    data: {
+      organizationId: context.organization.id,
+      customerId: customer.id,
+      code: nextCode("INV", count),
+      status: "DRAFT",
+      dueDate: parsed.dueDate ? new Date(parsed.dueDate) : null,
+      currency: parsed.currency,
+      notes: parsed.notes || null,
+      taxRate: parsed.taxRate,
+      subtotal,
+      taxAmount,
+      total,
+      lines: {
+        create: linesWithTotals.map((line) => ({
+          productId: line.productId,
+          description: line.description || null,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          discount: line.discount,
+          lineTotal: line.lineTotal,
+        })),
+      },
+    },
+    include: { lines: true },
+  });
+
+  await audit(context, "CREATE", "Invoice", invoice.id, invoice.code);
+  return mapInvoice(invoice);
+}
+
 export async function createSalesOrder(input: unknown, context: AuthContext) {
   if (!dbMode()) {
-    return createDemoSalesOrder(input, context);
+    const order = createDemoSalesOrder(input, context);
+    dispatchExtensionEvent(context, "order.created", order);
+    return order;
   }
 
   ensurePermission(context, "manage_sales");
@@ -1339,7 +1689,13 @@ export async function createSalesOrder(input: unknown, context: AuthContext) {
     `${order.code} satış siparişi oluşturuldu`,
   );
 
-  globalPluginManager.dispatch("order.created", order).catch(console.error);
+  dispatchExtensionEvent(context, "order.created", {
+    id: order.id,
+    code: order.code,
+    customerName: order.customerName,
+    lines: [{ productId: parsed.productId, quantity: parsed.quantity }],
+  });
+  return order;
 }
 
 export async function confirmSalesOrder(orderId: string, context: AuthContext) {
@@ -1451,11 +1807,24 @@ export async function receivePurchaseOrder(
   context: AuthContext,
 ) {
   if (!dbMode()) {
-    return receiveDemoPurchaseOrder(orderId, context);
+    const result = receiveDemoPurchaseOrder(orderId, context);
+    dispatchExtensionEvent(context, "purchase.received", { orderId });
+    return result;
   }
 
   ensurePermission(context, "manage_purchasing");
   const prisma = getPrisma();
+  let receivedPayload:
+    | {
+        orderId: string;
+        code: string;
+        receipts: Array<{
+          productId: string;
+          quantityReceived: number;
+          warehouseId: string;
+        }>;
+      }
+    | null = null;
 
   await prisma.$transaction(async (tx) => {
     const order = await tx.purchaseOrder.findFirst({
@@ -1510,6 +1879,15 @@ export async function receivePurchaseOrder(
       where: { id: order.id },
       data: { status: "COMPLETED" },
     });
+    receivedPayload = {
+      orderId: order.id,
+      code: order.code,
+      receipts: receipts.map((line) => ({
+        productId: line.productId,
+        quantityReceived: line.quantity - line.receivedQuantity,
+        warehouseId: warehouse.id,
+      })),
+    };
     await tx.auditLog.create({
       data: {
         organizationId: context.organization.id,
@@ -1521,6 +1899,10 @@ export async function receivePurchaseOrder(
       },
     });
   });
+
+  if (receivedPayload) {
+    dispatchExtensionEvent(context, "purchase.received", receivedPayload);
+  }
 }
 
 export async function createVariant(input: unknown, context: AuthContext) {

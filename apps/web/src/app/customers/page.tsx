@@ -1,34 +1,14 @@
+import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { Panel } from "@/components/ui";
+import { Panel, buttonClass } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
-import { getDataSourceMode } from "@/lib/data-source";
-import { getPrisma } from "@/lib/prisma";
-import type { Customer } from "@stockops/core/types";
+import { listCustomers } from "@/lib/repository";
 
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
   const context = await requireAuth();
-  
-  let customers: Customer[] = [];
-  if (getDataSourceMode() === "database") {
-    const raw = await getPrisma().customer.findMany({
-      where: { organizationId: context.organization.id },
-      orderBy: { name: "asc" },
-    });
-    customers = raw.map(c => ({
-      ...c,
-      email: c.email ?? undefined,
-      phone: c.phone ?? undefined,
-      taxId: c.taxId ?? undefined,
-      address: c.address ?? undefined,
-      createdAt: c.createdAt.toISOString(),
-    }));
-  } else {
-    // Demo fallback - get from demo snapshot if exists or empty array
-    // Customers are not in demo snapshot by default, so we just use empty array for now
-    customers = [];
-  }
+  const customers = await listCustomers(context);
 
   return (
     <AppShell
@@ -39,6 +19,18 @@ export default async function CustomersPage() {
       userName={context.user.name}
     >
       <div className="grid gap-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Müşteri listesi</h2>
+            <p className="text-sm text-[var(--text-secondary)]">
+              Satış ve fatura akışlarında kullanılacak hesaplar.
+            </p>
+          </div>
+          <Link className={buttonClass} href="/customers/new">
+            Yeni Müşteri
+          </Link>
+        </div>
+
         <Panel title="Müşteri listesi">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-left text-sm">

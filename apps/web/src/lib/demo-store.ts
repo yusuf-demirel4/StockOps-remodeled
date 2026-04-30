@@ -11,6 +11,8 @@ import {
 import {
   productInputSchema,
   productUpdateInputSchema,
+  customerInputSchema,
+  invoiceInputSchema,
   purchaseOrderInputSchema,
   salesOrderInputSchema,
   stockMovementInputSchema,
@@ -40,8 +42,11 @@ import type {
   AuditLog,
   BillOfMaterial,
   BomComponent,
+  Customer,
   CustomFieldValue,
   ExtensionWebhookSubscription,
+  Invoice,
+  InvoiceLine,
   ManufacturingOrder,
   Member,
   NotificationDelivery,
@@ -190,6 +195,24 @@ export function getDemoSnapshot(context: AuthContext): AppSnapshot {
       canManagePurchasing: can(role, "manage_purchasing"),
     },
   };
+}
+
+export function getDemoCustomers(context?: AuthContext) {
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+
+  return appState.customers.filter(
+    (customer) => customer.organizationId === snapshotContext.organization.id,
+  );
+}
+
+export function getDemoInvoices(context?: AuthContext) {
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+
+  return appState.invoices.filter(
+    (invoice) => invoice.organizationId === snapshotContext.organization.id,
+  );
 }
 
 export function authenticateDemoUser(email: string, password: string) {
@@ -759,6 +782,121 @@ export function updateSupplier(
   });
 
   return supplier;
+}
+
+export function createCustomer(input: unknown, context?: AuthContext) {
+  const parsed = customerInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(membership.role, "manage_sales")) {
+    throw new Error("Bu rol musteri olusturamaz.");
+  }
+
+  const exists = appState.customers.some(
+    (customer) =>
+      customer.organizationId === organization.id &&
+      customer.code === parsed.code,
+  );
+
+  if (exists) {
+    throw new Error("Bu musteri kodu zaten kayitli.");
+  }
+
+  const customer: Customer = {
+    id: id("cus"),
+    organizationId: organization.id,
+    code: parsed.code,
+    name: parsed.name,
+    email: parsed.email || undefined,
+    phone: parsed.phone || undefined,
+    taxId: parsed.taxId || undefined,
+    address: parsed.address || undefined,
+    paymentTermDays: parsed.paymentTermDays,
+    isActive: true,
+  };
+
+  appState.customers.unshift(customer);
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "CREATE",
+    entityType: "Customer",
+    entityId: customer.id,
+    summary: `${customer.name} musterisi olusturuldu`,
+  });
+
+  return customer;
+}
+
+export function createInvoice(input: unknown, context?: AuthContext) {
+  const parsed = invoiceInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(membership.role, "manage_sales")) {
+    throw new Error("Bu rol fatura olusturamaz.");
+  }
+
+  const customer = appState.customers.find(
+    (item) =>
+      item.id === parsed.customerId && item.organizationId === organization.id,
+  );
+
+  if (!customer) {
+    throw new Error("Musteri bulunamadi.");
+  }
+
+  const subtotal = parsed.lines.reduce((sum, line) => {
+    const discountRate = (line.discount ?? 0) / 100;
+    return sum + line.quantity * line.unitPrice * (1 - discountRate);
+  }, 0);
+  const taxAmount = subtotal * parsed.taxRate;
+  const total = subtotal + taxAmount;
+  const lines: InvoiceLine[] = parsed.lines.map((line) => {
+    const discountRate = (line.discount ?? 0) / 100;
+    return {
+      productId: line.productId,
+      description: line.description || undefined,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      discount: line.discount ?? 0,
+      lineTotal: line.quantity * line.unitPrice * (1 - discountRate),
+    };
+  });
+  const invoice: Invoice = {
+    id: id("inv"),
+    organizationId: organization.id,
+    customerId: customer.id,
+    code: code("INV", appState.invoices.length),
+    status: "DRAFT",
+    dueDate: parsed.dueDate || undefined,
+    subtotal,
+    discountAmount: 0,
+    taxRate: parsed.taxRate,
+    taxAmount,
+    total,
+    currency: parsed.currency,
+    notes: parsed.notes || undefined,
+    lines,
+    createdAt: new Date().toISOString(),
+  };
+
+  appState.invoices.unshift(invoice);
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "CREATE",
+    entityType: "Invoice",
+    entityId: invoice.id,
+    summary: `${invoice.code} faturasi olusturuldu`,
+  });
+
+  return invoice;
 }
 
 export function createSalesOrder(input: unknown, context?: AuthContext) {

@@ -1,17 +1,25 @@
 {
   "App": {
     "name": "StockOps",
-    "description": "Stok takip yonetim sistemi"
+    "description": "Stok takip yönetim sistemi"
   },
   "Settings": {
-    "business": "Isletme",
+    "business": "İşletme",
     "locale": "Dil",
-    "currency": "Varsayilan para birimi"
+    "currency": "Varsayılan para birimi"
   },
   "Mobile": {
     "home": "Mobil ana ekran",
     "receive": "Teslim al",
     "pick": "Topla",
-    "stocktake": "Sayim"
+    "stocktake": "Sayım"
+  },
+  "SignIn": {
+    "title": "Giriş yap",
+    "email": "E-posta",
+    "password": "Şifre",
+    "submit": "Giriş yap",
+    "invalid": "E-posta veya şifre hatalı.",
+    "demoHint": "Demo hesap hazır gelir. Database modunda aynı kullanıcıyı seed komutu oluşturur."
   }
 }

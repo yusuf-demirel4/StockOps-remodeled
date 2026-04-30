@@ -28,9 +28,7 @@ test.describe("Authentication", () => {
   }) => {
     await page.goto("/sign-in");
     // Logo metni veya başlık
-    await expect(
-      page.locator("text=StockOps, h1, p:has-text('StockOps')").first()
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "StockOps" })).toBeVisible();
   });
 
   // ── 2. Hatalı giriş ─────────────────────────────────────────────────────

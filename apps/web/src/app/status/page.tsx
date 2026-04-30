@@ -48,7 +48,26 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default async function StatusPage() {
-  const data = await getStatus();
+  const apiData = await getStatus();
+  const data =
+    apiData ??
+    ({
+      overall: "down",
+      services: [
+        {
+          name: "StockOps API",
+          status: "down",
+        },
+      ],
+      updatedAt: new Date().toISOString(),
+      incidents: [
+        {
+          title: "API unavailable",
+          description: "The status endpoint could not be reached.",
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    } satisfies StatusResponse);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
@@ -57,12 +76,13 @@ export default async function StatusPage() {
         <p className="mt-1 text-sm text-gray-500">Real-time system status</p>
       </div>
 
-      {!data ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-          <p className="text-red-700">Unable to reach the API. The service may be experiencing issues.</p>
-        </div>
-      ) : (
-        <>
+      <div className="grid gap-6">
+        {!apiData ? (
+          <div className="status-message rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+            <p className="text-red-700">Unable to reach the API. The service may be experiencing issues.</p>
+          </div>
+        ) : null}
+
           <div className="mb-6 rounded-lg border bg-[var(--bg-card)] p-6 text-center shadow-sm">
             <StatusBadge status={data.overall} />
             <p className="mt-2 text-sm text-gray-500">
@@ -72,7 +92,7 @@ export default async function StatusPage() {
 
           <div className="space-y-3">
             {data.services.map((service) => (
-              <div key={service.name} className="flex items-center justify-between rounded-lg border bg-[var(--bg-card)] px-4 py-3 shadow-sm">
+              <div key={service.name} className="service-status flex items-center justify-between rounded-lg border bg-[var(--bg-card)] px-4 py-3 shadow-sm">
                 <div>
                   <p className="font-medium text-gray-900">{service.name}</p>
                   {service.latencyMs != null && (
@@ -98,8 +118,7 @@ export default async function StatusPage() {
               ))}
             </div>
           )}
-        </>
-      )}
+      </div>
     </div>
   );
 }

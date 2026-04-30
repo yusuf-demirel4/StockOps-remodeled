@@ -10,7 +10,7 @@ import {
   ApproveReturnForm,
   CreateReturnDisclosure,
 } from "@/components/return-forms";
-import { EmptyState, Panel, StatusBadge } from "@/components/ui";
+import { EmptyState, Panel, StatusBadge, buttonClass } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
 import { getAppSnapshot } from "@/lib/repository";
 import {
@@ -52,6 +52,12 @@ export default async function OrdersPage() {
       title="Siparişler"
       userName={snapshot.user.name}
     >
+      <div className="mb-6 flex justify-end">
+        <Link className={buttonClass} href="/orders/new">
+          Yeni Sipariş
+        </Link>
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-2">
         <Panel title="Satış siparişi">
           <SalesOrderForm products={activeProducts} />

@@ -1,9 +1,8 @@
+import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { Panel } from "@/components/ui";
+import { Panel, buttonClass } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
-import { getDataSourceMode } from "@/lib/data-source";
-import { getPrisma } from "@/lib/prisma";
-import { getAppSnapshot } from "@/lib/repository";
+import { getAppSnapshot, listInvoices } from "@/lib/repository";
 import { crossRate } from "@stockops/core/currency";
 import type { Invoice } from "@stockops/core/types";
 
@@ -13,34 +12,9 @@ export default async function InvoicesPage() {
   const context = await requireAuth();
   const snapshot = await getAppSnapshot(context);
   const orgCurrency = context.organization.defaultCurrency ?? "TRY";
+  const locale = localeCode(context.organization.locale);
   
-  let invoices: Invoice[] = [];
-  if (getDataSourceMode() === "database") {
-    const raw = await getPrisma().invoice.findMany({
-      where: { organizationId: context.organization.id },
-      include: { lines: true },
-      orderBy: { createdAt: "desc" },
-    });
-    invoices = raw.map(inv => ({
-      ...inv,
-      issuedAt: inv.issuedAt?.toISOString(),
-      dueDate: inv.dueDate?.toISOString(),
-      notes: inv.notes ?? undefined,
-      subtotal: Number(inv.subtotal),
-      discountAmount: Number(inv.discountAmount),
-      taxRate: Number(inv.taxRate),
-      taxAmount: Number(inv.taxAmount),
-      total: Number(inv.total),
-      lines: inv.lines.map(l => ({
-        ...l,
-        description: l.description ?? undefined,
-        unitPrice: Number(l.unitPrice),
-        discount: Number(l.discount),
-        lineTotal: Number(l.lineTotal),
-      })),
-      createdAt: inv.createdAt.toISOString(),
-    }));
-  }
+  const invoices = await listInvoices(context);
 
   return (
     <AppShell
@@ -51,6 +25,12 @@ export default async function InvoicesPage() {
       userName={context.user.name}
     >
       <div className="grid gap-6">
+        <div className="flex justify-end">
+          <Link className={buttonClass} href="/invoices/new">
+            Yeni Fatura
+          </Link>
+        </div>
+
         <Panel title="Fatura listesi">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-left text-sm">
@@ -77,17 +57,17 @@ export default async function InvoicesPage() {
                       key={invoice.id}
                     >
                       <td className="py-3 pr-3 font-medium">{invoice.code}</td>
-                      <td className="py-3 pr-3">{new Date(invoice.createdAt).toLocaleDateString("tr-TR")}</td>
+                      <td className="py-3 pr-3">{new Date(invoice.createdAt).toLocaleDateString(locale)}</td>
                       <td className="py-3 pr-3">
                         <span className="rounded bg-[var(--bg-hover-nav)] px-2 py-1 text-xs font-medium text-[var(--text-nav)]">
                           {invoice.status}
                         </span>
                       </td>
                       <td className="py-3 pr-3 font-medium">
-                        {formatMoney(invoice.total, invoice.currency)}
+                        {formatMoney(invoice.total, invoice.currency, locale)}
                         {invoice.currency !== orgCurrency ? (
                           <span className="mt-1 block text-xs text-[var(--text-secondary)]">
-                            {convertedInvoiceTotal(invoice, orgCurrency, snapshot.exchangeRates)}
+                            {convertedInvoiceTotal(invoice, orgCurrency, snapshot.exchangeRates, locale)}
                           </span>
                         ) : null}
                       </td>
@@ -104,8 +84,12 @@ export default async function InvoicesPage() {
   );
 }
 
-function formatMoney(amount: number, currency: string) {
-  return new Intl.NumberFormat("tr-TR", {
+function localeCode(locale?: string) {
+  return locale === "en" ? "en-US" : "tr-TR";
+}
+
+function formatMoney(amount: number, currency: string, locale: string) {
+  return new Intl.NumberFormat(locale, {
     currency,
     style: "currency",
   }).format(amount);
@@ -115,10 +99,11 @@ function convertedInvoiceTotal(
   invoice: Invoice,
   quoteCurrency: string,
   rates: Array<{ baseCurrency: string; quoteCurrency: string; rate: number }>,
+  locale: string,
 ) {
   try {
     const rate = crossRate(rates, invoice.currency, quoteCurrency);
-    return formatMoney(invoice.total * rate, quoteCurrency);
+    return formatMoney(invoice.total * rate, quoteCurrency, locale);
   } catch {
     return `${quoteCurrency} kuru yok`;
   }

@@ -1,6 +1,14 @@
 import { z } from "zod";
 
 const positiveInt = z.coerce.number().int().positive();
+const httpWebhookUrl = z
+  .string()
+  .trim()
+  .url()
+  .refine((value) => {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+  }, "Webhook URL must use http or https.");
 const optionalBoolean = z.preprocess((value) => {
   if (value === "" || value === null || value === undefined) {
     return undefined;
@@ -185,13 +193,13 @@ export const extensionEventNameSchema = z.enum([
 ]);
 
 export const webhookSubscriptionInputSchema = z.object({
-  url: z.string().trim().url(),
+  url: httpWebhookUrl,
   events: z.array(extensionEventNameSchema).min(1),
   secret: z.string().trim().min(12).optional().or(z.literal("")),
 });
 
 export const webhookSubscriptionUpdateSchema = z.object({
-  url: z.string().trim().url().optional(),
+  url: httpWebhookUrl.optional(),
   events: z.array(extensionEventNameSchema).min(1).optional(),
   secret: z.string().trim().min(12).optional().or(z.literal("")),
   status: z.enum(["ACTIVE", "PAUSED"]).optional(),

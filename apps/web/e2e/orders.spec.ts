@@ -104,9 +104,9 @@ test.describe("Orders (Sipariş Yönetimi)", () => {
       await page.waitForURL(/\/orders\/[^/]+/, { timeout: 5_000 });
 
       // Durum: DRAFT, CONFIRMED, PICKING, PACKED, SHIPPED, DELIVERED
-      const statusEl = page.locator(
-        '[class*=badge], [class*=status], text=/DRAFT|CONFIRMED|PICKING|PACKED|SHIPPED|DELIVERED/i'
-      );
+      const statusEl = page
+        .locator('[class*=badge], [class*=status]')
+        .or(page.getByText(/DRAFT|CONFIRMED|PICKING|PACKED|SHIPPED|DELIVERED/i));
       await expect(statusEl.first()).toBeVisible({ timeout: 5_000 });
     }
   });

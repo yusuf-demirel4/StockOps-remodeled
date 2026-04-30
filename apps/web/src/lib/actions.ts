@@ -8,6 +8,8 @@ import { requireAuth, signInWithPassword, signOut } from "@/lib/auth";
 import {
   approveSalesReturn,
   confirmSalesOrder,
+  createCustomer,
+  createInvoice,
   createProduct,
   createPurchaseOrder,
   createSalesOrder,
@@ -49,6 +51,8 @@ function refresh() {
   revalidatePath("/inventory");
   revalidatePath("/manufacturing");
   revalidatePath("/orders");
+  revalidatePath("/customers");
+  revalidatePath("/invoices");
   revalidatePath("/suppliers");
   revalidatePath("/users");
   revalidatePath("/settings");
@@ -314,6 +318,53 @@ export async function updateSupplierAction(
         email: value(formData, "email"),
         phone: value(formData, "phone"),
         leadTimeDays: value(formData, "leadTimeDays"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function createCustomerAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Musteri eklendi.", (context) =>
+    createCustomer(
+      {
+        code: value(formData, "code"),
+        name: value(formData, "name"),
+        email: value(formData, "email"),
+        phone: value(formData, "phone"),
+        taxId: value(formData, "taxId"),
+        address: value(formData, "address"),
+        paymentTermDays: value(formData, "paymentTermDays"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function createInvoiceAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Fatura olusturuldu.", (context) =>
+    createInvoice(
+      {
+        customerId: value(formData, "customerId"),
+        dueDate: value(formData, "dueDate"),
+        taxRate: value(formData, "taxRate") || "0",
+        currency: value(formData, "currency") || context.organization.defaultCurrency || "TRY",
+        notes: value(formData, "notes"),
+        lines: [
+          {
+            productId: value(formData, "productId"),
+            description: value(formData, "description"),
+            quantity: value(formData, "quantity"),
+            unitPrice: value(formData, "unitPrice"),
+            discount: value(formData, "discount") || "0",
+          },
+        ],
       },
       context,
     ),

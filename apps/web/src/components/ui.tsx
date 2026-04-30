@@ -73,7 +73,7 @@ export function StatusBadge({
   return (
     <span
       className={clsx(
-        "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium",
+        "status-badge inline-flex items-center rounded-md px-2 py-1 text-xs font-medium",
         tone === "neutral" && "bg-[var(--neutral-badge-bg)] text-[var(--neutral-badge-text)]",
         tone === "success" && "bg-[var(--accent-success-bg2)] text-[var(--accent-success-text2)]",
         tone === "warning" && "bg-[var(--accent-warning-bg2)] text-[var(--accent-warning-text2)]",

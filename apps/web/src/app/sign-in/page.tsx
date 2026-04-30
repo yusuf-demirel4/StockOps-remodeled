@@ -1,8 +1,9 @@
+import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Boxes } from "lucide-react";
 import { buttonClass, inputClass } from "@/components/ui";
 import { signInAction } from "@/lib/actions";
 import { getAuthContext } from "@/lib/auth";
-import { redirect } from "next/navigation";
 
 type SignInPageProps = {
   searchParams: Promise<{ error?: string }>;
@@ -15,6 +16,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     redirect("/");
   }
 
+  const t = await getTranslations("SignIn");
   const { error } = await searchParams;
 
   return (
@@ -25,22 +27,22 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             <Boxes aria-hidden="true" className="size-5" />
           </span>
           <div>
+            <h1 className="text-xl font-semibold">StockOps</h1>
             <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--text-secondary)]">
-              StockOps
+              {t("title")}
             </p>
-            <h1 className="text-xl font-semibold">Giriş yap</h1>
           </div>
         </div>
 
         {error ? (
           <div className="mt-5 rounded-md border border-[var(--accent-danger-bg)] bg-[var(--accent-danger-bg)] px-3 py-2 text-sm text-[var(--accent-danger-text)]">
-            E-posta veya şifre hatalı.
+            {t("invalid")}
           </div>
         ) : null}
 
         <form action={signInAction} className="mt-6 grid gap-4">
           <label className="grid gap-1.5 text-sm font-medium">
-            E-posta
+            {t("email")}
             <input
               className={inputClass}
               defaultValue="eren@example.com"
@@ -50,7 +52,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             />
           </label>
           <label className="grid gap-1.5 text-sm font-medium">
-            Şifre
+            {t("password")}
             <input
               className={inputClass}
               defaultValue="stockops123"
@@ -61,13 +63,12 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             />
           </label>
           <button className={buttonClass} type="submit">
-            Giriş yap
+            {t("submit")}
           </button>
         </form>
 
         <p className="mt-4 text-sm text-[var(--text-secondary)]">
-          Demo hesap hazır gelir. Database modunda aynı kullanıcıyı seed komutu
-          oluşturur.
+          {t("demoHint")}
         </p>
       </section>
     </main>

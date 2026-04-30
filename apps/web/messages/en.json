@@ -13,5 +13,13 @@
     "receive": "Receive",
     "pick": "Pick",
     "stocktake": "Stocktake"
+  },
+  "SignIn": {
+    "title": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "invalid": "Email or password is incorrect.",
+    "demoHint": "A demo account is ready. In database mode, the seed command creates the same user."
   }
 }

@@ -71,6 +71,10 @@ async function deleteFromQueue(id) {
   });
 }
 
+function shouldQueueMutation(url) {
+  return url.pathname.startsWith("/api/") || url.pathname.startsWith("/v1/");
+}
+
 // --- Sync Manager ---
 async function syncQueue() {
   try {
@@ -144,6 +148,10 @@ self.addEventListener("fetch", (event) => {
 
   // Sadece Mutasyonlar için (Offline Sync Queue)
   if (request.method !== "GET") {
+    if (!shouldQueueMutation(url)) {
+      return;
+    }
+
     event.respondWith(
       fetch(request.clone()).catch(async () => {
         const reqClone = request.clone();
