@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ActionState } from "@/lib/action-state";
 import { requireAuth, signInWithPassword, signOut } from "@/lib/auth";
@@ -13,6 +14,7 @@ import {
   createSalesReturn,
   createStockMovement,
   createStockTransfer,
+  createWebhookSubscription,
   createSupplier,
   createUser,
   createVariant,
@@ -20,12 +22,17 @@ import {
   
   deleteVariant,
   receivePurchaseOrder,
+  recordStocktakeCount,
+  refreshExchangeRates,
   setProductActive,
+  updateOrganizationSettings,
   updateProduct,
   updateSupplier,
   updateUserRole,
   updateVariant,
   updateWarehouse,
+  updateWebhookSubscription,
+  upsertCustomField,
 } from "@/lib/repository";
 import { signInInputSchema } from "@stockops/core/schemas";
 import type { AuthContext } from "@stockops/core/types";
@@ -45,6 +52,10 @@ function refresh() {
   revalidatePath("/suppliers");
   revalidatePath("/users");
   revalidatePath("/settings");
+  revalidatePath("/mobile");
+  revalidatePath("/mobile/receive");
+  revalidatePath("/mobile/pick");
+  revalidatePath("/mobile/stocktake");
 }
 
 function success(message: string): ActionState {
@@ -197,6 +208,23 @@ export async function createStockMovementAction(
         warehouseId: value(formData, "warehouseId"),
         type: value(formData, "type"),
         quantity: value(formData, "quantity"),
+        note: value(formData, "note"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function recordStocktakeAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Sayim kaydi islendi.", (context) =>
+    recordStocktakeCount(
+      {
+        productId: value(formData, "productId"),
+        warehouseId: value(formData, "warehouseId"),
+        countedQuantity: value(formData, "countedQuantity"),
         note: value(formData, "note"),
       },
       context,
@@ -440,6 +468,106 @@ export async function createUserAction(
         email: value(formData, "email"),
         password: value(formData, "password"),
         role: value(formData, "role"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function updateOrganizationSettingsAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  const result = await runMutation("Isletme ayarlari guncellendi.", (context) =>
+    updateOrganizationSettings(
+      {
+        defaultCurrency: value(formData, "defaultCurrency"),
+        locale: value(formData, "locale"),
+      },
+      context,
+    ),
+  );
+
+  if (result.status === "success") {
+    const cookieStore = await cookies();
+    cookieStore.set("stockops_locale", value(formData, "locale"), {
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+  }
+
+  return result;
+}
+
+export async function refreshExchangeRatesAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Kur bilgisi guncellendi.", (context) =>
+    refreshExchangeRates(
+      {
+        baseCurrency: value(formData, "baseCurrency"),
+        quoteCurrency: value(formData, "quoteCurrency"),
+        provider: value(formData, "provider") || undefined,
+      },
+      context,
+    ),
+  );
+}
+
+export async function createWebhookSubscriptionAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Webhook aboneligi olusturuldu.", (context) =>
+    createWebhookSubscription(
+      {
+        url: value(formData, "url"),
+        events: formData
+          .getAll("events")
+          .filter((item): item is string => typeof item === "string" && item.length > 0),
+        secret: value(formData, "secret"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function updateWebhookSubscriptionAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Webhook aboneligi guncellendi.", (context) =>
+    updateWebhookSubscription(
+      value(formData, "subscriptionId"),
+      {
+        status: value(formData, "status"),
+      },
+      context,
+    ),
+  );
+}
+
+export async function upsertCustomFieldAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  let parsedValue: unknown = value(formData, "value");
+
+  try {
+    parsedValue = JSON.parse(value(formData, "value"));
+  } catch {
+    // Plain strings are valid custom field values.
+  }
+
+  return runMutation("Ozel alan kaydedildi.", (context) =>
+    upsertCustomField(
+      value(formData, "entityType"),
+      value(formData, "entityId"),
+      {
+        key: value(formData, "key"),
+        value: parsedValue,
       },
       context,
     ),

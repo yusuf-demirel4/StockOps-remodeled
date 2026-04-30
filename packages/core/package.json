@@ -21,7 +21,10 @@
     "./webhooks": "./src/webhooks.ts",
     "./logger": "./src/logger.ts",
     "./totp": "./src/totp.ts",
-    "./reports": "./src/reports.ts"
+    "./reports": "./src/reports.ts",
+    "./forecast": "./src/forecast.ts",
+    "./currency": "./src/currency.ts",
+    "./extensions": "./src/extensions.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

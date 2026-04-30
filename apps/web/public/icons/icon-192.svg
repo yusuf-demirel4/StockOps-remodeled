@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="36" fill="#0f172a"/>
+  <g transform="translate(36 36)" stroke="#6366f1" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M12 32 L60 8 L108 32 L60 56 Z" fill="#6366f1" fill-opacity="0.15"/>
+    <path d="M12 32 V96 L60 120 V56"/>
+    <path d="M108 32 V96 L60 120"/>
+    <path d="M36 20 L84 44"/>
+  </g>
+  <text x="96" y="170" text-anchor="middle" font-family="system-ui, sans-serif" font-size="22" font-weight="700" fill="#e2e8f0" letter-spacing="1">StockOps</text>
+</svg>

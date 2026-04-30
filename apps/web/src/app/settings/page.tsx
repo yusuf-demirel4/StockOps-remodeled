@@ -5,6 +5,11 @@ import {
   WarehouseDefaultForm,
   WarehouseUpdateDisclosure,
 } from "@/components/warehouse-forms";
+import {
+  ExchangeRatePanel,
+  ExtensionApiPanel,
+  OrganizationSettingsForm,
+} from "@/components/settings-phase6-panels";
 import { rolePermissions } from "@stockops/core/inventory";
 import { requireAuth } from "@/lib/auth";
 import { getAppSnapshot } from "@/lib/repository";
@@ -126,6 +131,25 @@ export default async function SettingsPage() {
               <WarehouseCreateForm />
             </Panel>
           ) : null}
+
+          <Panel title="Faz 6.3: Dil ve para birimi">
+            <OrganizationSettingsForm organization={snapshot.organization} />
+          </Panel>
+
+          <Panel title="Faz 6.3: Kur servisi">
+            <ExchangeRatePanel
+              exchangeRates={snapshot.exchangeRates}
+              organization={snapshot.organization}
+            />
+          </Panel>
+
+          <Panel title="Faz 6.4: Extension API">
+            <ExtensionApiPanel
+              customFields={snapshot.customFields}
+              products={snapshot.products}
+              webhookSubscriptions={snapshot.webhookSubscriptions}
+            />
+          </Panel>
 
           <Panel title="P2 entegrasyon inbox">
             {snapshot.webhookEvents.length === 0 ? (

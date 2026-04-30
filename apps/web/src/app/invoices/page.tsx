@@ -3,12 +3,16 @@ import { Panel } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
 import { getDataSourceMode } from "@/lib/data-source";
 import { getPrisma } from "@/lib/prisma";
+import { getAppSnapshot } from "@/lib/repository";
+import { crossRate } from "@stockops/core/currency";
 import type { Invoice } from "@stockops/core/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function InvoicesPage() {
   const context = await requireAuth();
+  const snapshot = await getAppSnapshot(context);
+  const orgCurrency = context.organization.defaultCurrency ?? "TRY";
   
   let invoices: Invoice[] = [];
   if (getDataSourceMode() === "database") {
@@ -79,7 +83,14 @@ export default async function InvoicesPage() {
                           {invoice.status}
                         </span>
                       </td>
-                      <td className="py-3 pr-3 font-medium">{invoice.total.toFixed(2)}</td>
+                      <td className="py-3 pr-3 font-medium">
+                        {formatMoney(invoice.total, invoice.currency)}
+                        {invoice.currency !== orgCurrency ? (
+                          <span className="mt-1 block text-xs text-[var(--text-secondary)]">
+                            {convertedInvoiceTotal(invoice, orgCurrency, snapshot.exchangeRates)}
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="py-3 pr-3 text-gray-500">{invoice.currency}</td>
                     </tr>
                   ))
@@ -91,4 +102,24 @@ export default async function InvoicesPage() {
       </div>
     </AppShell>
   );
+}
+
+function formatMoney(amount: number, currency: string) {
+  return new Intl.NumberFormat("tr-TR", {
+    currency,
+    style: "currency",
+  }).format(amount);
+}
+
+function convertedInvoiceTotal(
+  invoice: Invoice,
+  quoteCurrency: string,
+  rates: Array<{ baseCurrency: string; quoteCurrency: string; rate: number }>,
+) {
+  try {
+    const rate = crossRate(rates, invoice.currency, quoteCurrency);
+    return formatMoney(invoice.total * rate, quoteCurrency);
+  } catch {
+    return `${quoteCurrency} kuru yok`;
+  }
 }

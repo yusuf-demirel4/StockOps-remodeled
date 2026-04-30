@@ -11,30 +11,39 @@ import {
   createStockMovement as createDemoStockMovement,
   createStockTransfer as createDemoStockTransfer,
   createSupplier as createDemoSupplier,
+  createWebhookSubscription as createDemoWebhookSubscription,
   createUser as createDemoUser,
   createWarehouse as createDemoWarehouse,
   deleteUser as deleteDemoUser,
   getDemoSnapshot,
   receivePurchaseOrder as receiveDemoPurchaseOrder,
+  recordStocktakeCount as recordDemoStocktakeCount,
   setProductActive as setDemoProductActive,
   startManufacturingOrder as startDemoMo,
+  updateOrganizationSettings as updateDemoOrganizationSettings,
   updateBom as updateDemoBom,
   updateProduct as updateDemoProduct,
   updateSupplier as updateDemoSupplier,
   updateUserRole as updateDemoUserRole,
   updateWarehouse as updateDemoWarehouse,
+  updateWebhookSubscription as updateDemoWebhookSubscription,
+  upsertCustomField as upsertDemoCustomField,
 } from "@/lib/demo-store";
 import { getPrisma } from "@/lib/prisma";
 import {
   bomInputSchema,
   bomUpdateInputSchema,
   manufacturingOrderInputSchema,
+  customFieldInputSchema,
+  exchangeRateQuerySchema,
+  organizationSettingsInputSchema,
   productInputSchema,
   productUpdateInputSchema,
   purchaseOrderInputSchema,
   salesOrderInputSchema,
   salesReturnInputSchema,
   stockMovementInputSchema,
+  stocktakeCountInputSchema,
   stockTransferInputSchema,
   supplierInputSchema,
   supplierUpdateInputSchema,
@@ -44,12 +53,20 @@ import {
   variantUpdateInputSchema,
   warehouseInputSchema,
   warehouseUpdateInputSchema,
+  webhookSubscriptionInputSchema,
+  webhookSubscriptionUpdateSchema,
 } from "@stockops/core/schemas";
+import {
+  parseEcbEuroRates,
+  parseTcmbTryRates,
+  crossRate,
+} from "@stockops/core/currency";
 import {
   assertEnoughStock,
   buildStockRows,
   getOpenPurchaseOrders,
   getOpenSalesOrders,
+  getStockOnHand,
 } from "@stockops/core/inventory";
 import { hashPassword } from "@stockops/core/password";
 import type {
@@ -57,6 +74,10 @@ import type {
   AuthContext,
   Member,
   NotificationDelivery,
+  CustomFieldValue,
+  ExchangeRate,
+  ExtensionWebhookSubscription,
+  ExtensionEventName,
   Product,
   ProductVariant,
   PurchaseOrder,
@@ -227,6 +248,72 @@ function mapNotificationDelivery(delivery: {
   };
 }
 
+function mapWebhookSubscription(subscription: {
+  id: string;
+  organizationId: string;
+  url: string;
+  events: unknown;
+  secret: string | null;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}): ExtensionWebhookSubscription {
+  return {
+    id: subscription.id,
+    organizationId: subscription.organizationId,
+    url: subscription.url,
+    events: Array.isArray(subscription.events)
+      ? (subscription.events as ExtensionEventName[])
+      : [],
+    secret: subscription.secret ?? undefined,
+    status: subscription.status as ExtensionWebhookSubscription["status"],
+    createdAt: iso(subscription.createdAt),
+    updatedAt: iso(subscription.updatedAt),
+  };
+}
+
+function mapCustomField(field: {
+  id: string;
+  organizationId: string;
+  entityType: string;
+  entityId: string;
+  key: string;
+  value: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}): CustomFieldValue {
+  return {
+    id: field.id,
+    organizationId: field.organizationId,
+    entityType: field.entityType,
+    entityId: field.entityId,
+    key: field.key,
+    value: field.value,
+    createdAt: iso(field.createdAt),
+    updatedAt: iso(field.updatedAt),
+  };
+}
+
+function mapExchangeRate(rate: {
+  id: string;
+  baseCurrency: string;
+  quoteCurrency: string;
+  rate: unknown;
+  provider: string;
+  observedAt: Date;
+  createdAt: Date;
+}): ExchangeRate {
+  return {
+    id: rate.id,
+    baseCurrency: rate.baseCurrency,
+    quoteCurrency: rate.quoteCurrency,
+    rate: Number(rate.rate),
+    provider: rate.provider as ExchangeRate["provider"],
+    observedAt: iso(rate.observedAt),
+    createdAt: iso(rate.createdAt),
+  };
+}
+
 export async function getAppSnapshot(
   context: AuthContext,
 ): Promise<AppSnapshot> {
@@ -247,6 +334,9 @@ export async function getAppSnapshot(
     productVariants,
     auditLogs,
     webhookEvents,
+    webhookSubscriptions,
+    customFields,
+    exchangeRates,
     notificationDeliveries,
     memberships,
     billsOfMaterial,
@@ -299,6 +389,21 @@ export async function getAppSnapshot(
       orderBy: { receivedAt: "desc" },
       take: 12,
     }),
+    (prisma as any).extensionWebhookSubscription?.findMany?.({
+      where: { organizationId },
+      orderBy: { createdAt: "desc" },
+      take: 25,
+    }).catch(() => []) ?? Promise.resolve([]),
+    (prisma as any).customField?.findMany?.({
+      where: { organizationId },
+      orderBy: { updatedAt: "desc" },
+      take: 25,
+    }).catch(() => []) ?? Promise.resolve([]),
+    (prisma as any).exchangeRate?.findMany?.({
+      where: { organizationId },
+      orderBy: [{ observedAt: "desc" }, { quoteCurrency: "asc" }],
+      take: 40,
+    }).catch(() => []) ?? Promise.resolve([]),
     prisma.notificationDelivery.findMany({
       where: { organizationId },
       orderBy: { createdAt: "desc" },
@@ -461,6 +566,14 @@ export async function getAppSnapshot(
       createdAt: iso(m.createdAt),
     })),
     webhookEvents: webhookEvents.map(mapWebhookEvent),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    webhookSubscriptions: webhookSubscriptions.map((item: any) =>
+      mapWebhookSubscription(item),
+    ),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    customFields: customFields.map((item: any) => mapCustomField(item)),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    exchangeRates: exchangeRates.map((item: any) => mapExchangeRate(item)),
     notificationDeliveries: notificationDeliveries.map(mapNotificationDelivery),
     permissions: {
       canManageUsers: can(context.role, "manage_users"),
@@ -470,6 +583,257 @@ export async function getAppSnapshot(
       canManagePurchasing: can(context.role, "manage_purchasing"),
     },
   };
+}
+
+export async function updateOrganizationSettings(
+  input: unknown,
+  context: AuthContext,
+) {
+  if (!dbMode()) {
+    return updateDemoOrganizationSettings(input, context);
+  }
+
+  ensurePermission(context, "manage_users");
+  const parsed = organizationSettingsInputSchema.parse(input);
+  const updated = await getPrisma().organization.update({
+    where: { id: context.organization.id },
+    data: {
+      defaultCurrency: parsed.defaultCurrency,
+      locale: parsed.locale,
+    },
+  });
+
+  context.organization.defaultCurrency = updated.defaultCurrency;
+  context.organization.locale = updated.locale;
+  return {
+    id: updated.id,
+    name: updated.name,
+    slug: updated.slug,
+    defaultCurrency: updated.defaultCurrency,
+    locale: updated.locale,
+  };
+}
+
+export async function recordStocktakeCount(
+  input: unknown,
+  context: AuthContext,
+) {
+  if (!dbMode()) {
+    return recordDemoStocktakeCount(input, context);
+  }
+
+  ensurePermission(context, "manage_stock");
+  const parsed = stocktakeCountInputSchema.parse(input);
+  const prisma = getPrisma();
+  const [product, warehouse, movements] = await Promise.all([
+    prisma.product.findFirst({
+      where: {
+        id: parsed.productId,
+        organizationId: context.organization.id,
+        isActive: true,
+      },
+    }),
+    prisma.warehouse.findFirst({
+      where: { id: parsed.warehouseId, organizationId: context.organization.id },
+    }),
+    prisma.stockMovement.findMany({
+      where: {
+        organizationId: context.organization.id,
+        productId: parsed.productId,
+        warehouseId: parsed.warehouseId,
+      },
+    }),
+  ]);
+
+  if (!product || !warehouse) {
+    throw new Error("Product or warehouse not found.");
+  }
+
+  const currentOnHand = getStockOnHand(
+    movements.map(mapStockMovement),
+    parsed.productId,
+    parsed.warehouseId,
+  );
+  const quantityChange = parsed.countedQuantity - currentOnHand;
+  const reference = `STK-${Date.now()}`;
+
+  const movement = await prisma.$transaction(async (tx) => {
+    const created = await tx.stockMovement.create({
+      data: {
+        organizationId: context.organization.id,
+        warehouseId: parsed.warehouseId,
+        productId: parsed.productId,
+        type: "ADJUSTMENT",
+        quantityChange,
+        reference,
+        note: parsed.note || `Stocktake count ${parsed.countedQuantity}`,
+        createdById: context.user.id,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organization.id,
+        actorId: context.user.id,
+        action: "STOCKTAKE",
+        entityType: "StockMovement",
+        entityId: created.id,
+        summary: `${product.sku} stocktake adjusted by ${quantityChange}`,
+      },
+    });
+
+    return created;
+  });
+
+  return mapStockMovement(movement);
+}
+
+export async function refreshExchangeRates(
+  input: unknown,
+  context: AuthContext,
+) {
+  if (!dbMode()) {
+    return [];
+  }
+
+  ensurePermission(context, "manage_sales");
+  const parsed = exchangeRateQuerySchema.parse(input ?? {});
+  const provider = parsed.provider ?? (parsed.baseCurrency === "TRY" ? "TCMB" : "ECB");
+  const rates =
+    provider === "TCMB"
+      ? parseTcmbTryRates(await fetchText("https://www.tcmb.gov.tr/kurlar/today.xml"))
+      : parseEcbEuroRates(
+          await fetchText(
+            "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml",
+          ),
+        );
+
+  const rate = crossRate(rates, parsed.baseCurrency, parsed.quoteCurrency);
+  const observedAt =
+    rates.find(
+      (item) =>
+        item.baseCurrency === parsed.baseCurrency ||
+        item.quoteCurrency === parsed.quoteCurrency,
+    )?.observedAt ?? new Date().toISOString();
+
+  const prisma = getPrisma() as any;
+  const saved = await prisma.exchangeRate.upsert({
+    where: {
+      organizationId_provider_baseCurrency_quoteCurrency_observedAt: {
+        organizationId: context.organization.id,
+        provider,
+        baseCurrency: parsed.baseCurrency,
+        quoteCurrency: parsed.quoteCurrency,
+        observedAt: new Date(observedAt),
+      },
+    },
+    update: { rate },
+    create: {
+      organizationId: context.organization.id,
+      provider,
+      baseCurrency: parsed.baseCurrency,
+      quoteCurrency: parsed.quoteCurrency,
+      rate,
+      observedAt: new Date(observedAt),
+    },
+  });
+
+  return mapExchangeRate(saved);
+}
+
+export async function createWebhookSubscription(
+  input: unknown,
+  context: AuthContext,
+) {
+  if (!dbMode()) {
+    return createDemoWebhookSubscription(input, context);
+  }
+
+  ensurePermission(context, "manage_users");
+  const parsed = webhookSubscriptionInputSchema.parse(input);
+  const subscription = await (getPrisma() as any).extensionWebhookSubscription.create({
+    data: {
+      organizationId: context.organization.id,
+      url: parsed.url,
+      events: parsed.events,
+      secret: parsed.secret || null,
+    },
+  });
+  return mapWebhookSubscription(subscription);
+}
+
+export async function updateWebhookSubscription(
+  subscriptionId: string,
+  input: unknown,
+  context: AuthContext,
+) {
+  if (!dbMode()) {
+    return updateDemoWebhookSubscription(subscriptionId, input, context);
+  }
+
+  ensurePermission(context, "manage_users");
+  const parsed = webhookSubscriptionUpdateSchema.parse(input);
+  const prisma = getPrisma() as any;
+  const existing = await prisma.extensionWebhookSubscription.findFirst({
+    where: { id: subscriptionId, organizationId: context.organization.id },
+  });
+
+  if (!existing) {
+    throw new Error("Webhook subscription not found.");
+  }
+
+  const updated = await prisma.extensionWebhookSubscription.update({
+    where: { id: existing.id },
+    data: {
+      url: parsed.url,
+      events: parsed.events,
+      secret:
+        parsed.secret === undefined ? undefined : parsed.secret || null,
+      status: parsed.status,
+    },
+  });
+  return mapWebhookSubscription(updated);
+}
+
+export async function upsertCustomField(
+  entityType: string,
+  entityId: string,
+  input: unknown,
+  context: AuthContext,
+) {
+  if (!dbMode()) {
+    return upsertDemoCustomField(entityType, entityId, input, context);
+  }
+
+  ensurePermission(context, "manage_products");
+  const parsed = customFieldInputSchema.parse(input);
+  const field = await (getPrisma() as any).customField.upsert({
+    where: {
+      organizationId_entityType_entityId_key: {
+        organizationId: context.organization.id,
+        entityType,
+        entityId,
+        key: parsed.key,
+      },
+    },
+    update: { value: parsed.value },
+    create: {
+      organizationId: context.organization.id,
+      entityType,
+      entityId,
+      key: parsed.key,
+      value: parsed.value,
+    },
+  });
+  return mapCustomField(field);
+}
+
+async function fetchText(url: string) {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Unable to fetch ${url}: ${response.status}`);
+  }
+  return response.text();
 }
 
 export async function createProduct(input: unknown, context: AuthContext) {

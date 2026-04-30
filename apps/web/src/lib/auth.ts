@@ -141,6 +141,8 @@ export async function getAuthContext(): Promise<AuthContext | null> {
       id: session.organization.id,
       name: session.organization.name,
       slug: session.organization.slug,
+      defaultCurrency: session.organization.defaultCurrency,
+      locale: session.organization.locale,
     },
     role: membership.role as Role,
     sessionToken: token,

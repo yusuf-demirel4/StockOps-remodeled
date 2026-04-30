@@ -1,0 +1,10 @@
+[project]
+name = "stockops-sdk"
+version = "0.1.0"
+description = "Python client for the StockOps public extension API"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.31.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

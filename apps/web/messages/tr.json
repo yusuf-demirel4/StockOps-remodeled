@@ -1,0 +1,17 @@
+{
+  "App": {
+    "name": "StockOps",
+    "description": "Stok takip yonetim sistemi"
+  },
+  "Settings": {
+    "business": "Isletme",
+    "locale": "Dil",
+    "currency": "Varsayilan para birimi"
+  },
+  "Mobile": {
+    "home": "Mobil ana ekran",
+    "receive": "Teslim al",
+    "pick": "Topla",
+    "stocktake": "Sayim"
+  }
+}

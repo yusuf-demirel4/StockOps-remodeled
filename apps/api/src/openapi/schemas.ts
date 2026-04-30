@@ -694,3 +694,130 @@ export const invoiceCreateBodySchema: SchemaObject = {
     },
   },
 };
+
+export const extensionEventSchema: SchemaObject = {
+  type: "string",
+  enum: [
+    "order.created",
+    "order.updated",
+    "stock.changed",
+    "invoice.issued",
+    "product.updated",
+    "purchase.received",
+  ],
+  example: "order.created",
+};
+
+export const webhookSubscriptionSchema: SchemaObject = {
+  type: "object",
+  required: ["id", "organizationId", "url", "events", "status", "createdAt"],
+  properties: {
+    id: id("extwh_001"),
+    organizationId: id("org_001"),
+    url: { type: "string", format: "uri", example: "https://example.com/webhooks/stockops" },
+    events: { type: "array", items: extensionEventSchema },
+    secret: { type: "string", example: "whsec_very_secret" },
+    status: { type: "string", enum: ["ACTIVE", "PAUSED"], example: "ACTIVE" },
+    createdAt: isoDateTime("2026-04-29T12:00:00.000Z"),
+    updatedAt: isoDateTime("2026-04-29T12:00:00.000Z"),
+  },
+};
+
+export const webhookSubscriptionCreateBodySchema: SchemaObject = {
+  type: "object",
+  required: ["url", "events"],
+  properties: {
+    url: { type: "string", format: "uri", example: "https://example.com/webhooks/stockops" },
+    events: { type: "array", items: extensionEventSchema },
+    secret: { type: "string", minLength: 12, example: "whsec_very_secret" },
+  },
+};
+
+export const webhookSubscriptionUpdateBodySchema: SchemaObject = {
+  type: "object",
+  properties: {
+    url: { type: "string", format: "uri", example: "https://example.com/webhooks/stockops" },
+    events: { type: "array", items: extensionEventSchema },
+    secret: { type: "string", minLength: 12, example: "whsec_rotated_secret" },
+    status: { type: "string", enum: ["ACTIVE", "PAUSED"], example: "PAUSED" },
+  },
+};
+
+export const customFieldSchema: SchemaObject = {
+  type: "object",
+  required: ["key", "value"],
+  properties: {
+    id: id("cf_001"),
+    organizationId: id("org_001"),
+    entityType: { type: "string", example: "Product" },
+    entityId: id("prd_001"),
+    key: { type: "string", example: "warranty.months" },
+    value: {
+      oneOf: [
+        { type: "string" },
+        { type: "number" },
+        { type: "boolean" },
+        { type: "object", additionalProperties: true },
+        { type: "array", items: {} },
+      ],
+      example: 24,
+    },
+    createdAt: isoDateTime("2026-04-29T12:00:00.000Z"),
+    updatedAt: isoDateTime("2026-04-29T12:00:00.000Z"),
+  },
+};
+
+export const forecastResultSchema: SchemaObject = {
+  type: "object",
+  required: ["method", "history", "forecast", "parameters"],
+  properties: {
+    productId: id("prd_001"),
+    productName: { type: "string", example: "Çelik Hasır 100x200" },
+    productSku: { type: "string", example: "STL-001" },
+    method: {
+      type: "string",
+      enum: ["MOVING_AVG", "EXPONENTIAL_SMOOTHING", "HOLT_WINTERS"],
+      example: "HOLT_WINTERS",
+    },
+    historyDays: { type: "integer", example: 90 },
+    history: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["date", "value"],
+        properties: {
+          date: { type: "string", example: "2026-04-25" },
+          value: { type: "number", example: 12 },
+        },
+      },
+    },
+    forecast: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["date", "value", "lower", "upper"],
+        properties: {
+          date: { type: "string", example: "2026-04-26" },
+          value: { type: "number", example: 13.4 },
+          lower: { type: "number", example: 9.1 },
+          upper: { type: "number", example: 17.7 },
+        },
+      },
+    },
+    metrics: {
+      type: "object",
+      nullable: true,
+      properties: {
+        mae: { type: "number", example: 1.42 },
+        rmse: { type: "number", example: 1.85 },
+        mape: { type: "number", nullable: true, example: 8.7 },
+        sampleSize: { type: "integer", example: 60 },
+      },
+    },
+    parameters: {
+      type: "object",
+      additionalProperties: { type: "number" },
+      example: { alpha: 0.4, beta: 0.1, gamma: 0.2, seasonLength: 7 },
+    },
+  },
+};

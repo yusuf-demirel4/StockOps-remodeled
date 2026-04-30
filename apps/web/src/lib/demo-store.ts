@@ -6,6 +6,7 @@ import {
   can,
   getOpenPurchaseOrders,
   getOpenSalesOrders,
+  getStockOnHand,
 } from "@stockops/core/inventory";
 import {
   productInputSchema,
@@ -26,6 +27,11 @@ import {
   bomInputSchema,
   bomUpdateInputSchema,
   manufacturingOrderInputSchema,
+  customFieldInputSchema,
+  organizationSettingsInputSchema,
+  stocktakeCountInputSchema,
+  webhookSubscriptionInputSchema,
+  webhookSubscriptionUpdateSchema,
 } from "@stockops/core/schemas";
 import type {
   AppState,
@@ -34,6 +40,8 @@ import type {
   AuditLog,
   BillOfMaterial,
   BomComponent,
+  CustomFieldValue,
+  ExtensionWebhookSubscription,
   ManufacturingOrder,
   ManufacturingOrderStatus,
   Member,
@@ -163,6 +171,15 @@ export function getDemoSnapshot(context: AuthContext): AppSnapshot {
     webhookEvents: (appState.webhookEvents ?? [])
       .filter((event) => event.organizationId === organization.id)
       .slice(0, 12) as WebhookEvent[],
+    webhookSubscriptions: (appState.webhookSubscriptions ?? []).filter(
+      (subscription) => subscription.organizationId === organization.id,
+    ),
+    customFields: (appState.customFields ?? [])
+      .filter((field) => field.organizationId === organization.id)
+      .slice(0, 25),
+    exchangeRates: (appState.exchangeRates ?? [])
+      .filter((rate) => rate.id || rate.baseCurrency)
+      .slice(0, 40),
     notificationDeliveries: (appState.notificationDeliveries ?? [])
       .filter((delivery) => delivery.organizationId === organization.id)
       .slice(0, 12) as NotificationDelivery[],
@@ -932,6 +949,158 @@ export function receivePurchaseOrder(orderId: string, context?: AuthContext) {
     entityId: order.id,
     summary: `${order.code} teslim alındı`,
   });
+}
+
+export function updateOrganizationSettings(input: unknown, context?: AuthContext) {
+  const parsed = organizationSettingsInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const organization = appState.organizations.find(
+    (item) => item.id === snapshotContext.organization.id,
+  );
+
+  if (!organization) {
+    throw new Error("Organization not found.");
+  }
+
+  organization.defaultCurrency = parsed.defaultCurrency;
+  organization.locale = parsed.locale;
+  return organization;
+}
+
+export function recordStocktakeCount(input: unknown, context?: AuthContext) {
+  const parsed = stocktakeCountInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+  const membership = getMembershipForContext(appState, snapshotContext);
+
+  if (!can(membership.role, "manage_stock")) {
+    throw new Error("Bu rol sayim kaydi olusturamaz.");
+  }
+
+  const onHand = getStockOnHand(
+    appState.stockMovements,
+    parsed.productId,
+    parsed.warehouseId,
+  );
+  const quantityChange = parsed.countedQuantity - onHand;
+
+  const movement: StockMovement = {
+    id: id("mov"),
+    organizationId: organization.id,
+    warehouseId: parsed.warehouseId,
+    productId: parsed.productId,
+    type: "ADJUSTMENT",
+    quantityChange,
+    reference: `STK-${Date.now()}`,
+    note: parsed.note || `Stocktake count ${parsed.countedQuantity}`,
+    createdById: user.id,
+    createdAt: new Date().toISOString(),
+  };
+
+  appState.stockMovements.unshift(movement);
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "STOCKTAKE",
+    entityType: "StockMovement",
+    entityId: movement.id,
+    summary: `Stocktake adjusted by ${quantityChange}`,
+  });
+
+  return movement;
+}
+
+export function createWebhookSubscription(
+  input: unknown,
+  context?: AuthContext,
+) {
+  const parsed = webhookSubscriptionInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization } = snapshotContext;
+  const subscription: ExtensionWebhookSubscription = {
+    id: id("extwh"),
+    organizationId: organization.id,
+    url: parsed.url,
+    events: parsed.events,
+    secret: parsed.secret || undefined,
+    status: "ACTIVE",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  appState.webhookSubscriptions ??= [];
+  appState.webhookSubscriptions.unshift(subscription);
+  return subscription;
+}
+
+export function updateWebhookSubscription(
+  subscriptionId: string,
+  input: unknown,
+  context?: AuthContext,
+) {
+  const parsed = webhookSubscriptionUpdateSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const subscription = (appState.webhookSubscriptions ?? []).find(
+    (item) =>
+      item.id === subscriptionId &&
+      item.organizationId === snapshotContext.organization.id,
+  );
+
+  if (!subscription) {
+    throw new Error("Webhook subscription not found.");
+  }
+
+  subscription.url = parsed.url ?? subscription.url;
+  subscription.events = parsed.events ?? subscription.events;
+  subscription.secret =
+    parsed.secret === undefined ? subscription.secret : parsed.secret || undefined;
+  subscription.status = parsed.status ?? subscription.status;
+  subscription.updatedAt = new Date().toISOString();
+  return subscription;
+}
+
+export function upsertCustomField(
+  entityType: string,
+  entityId: string,
+  input: unknown,
+  context?: AuthContext,
+) {
+  const parsed = customFieldInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization } = snapshotContext;
+  appState.customFields ??= [];
+
+  const existing = appState.customFields.find(
+    (field) =>
+      field.organizationId === organization.id &&
+      field.entityType === entityType &&
+      field.entityId === entityId &&
+      field.key === parsed.key,
+  );
+
+  if (existing) {
+    existing.value = parsed.value;
+    existing.updatedAt = new Date().toISOString();
+    return existing;
+  }
+
+  const field: CustomFieldValue = {
+    id: id("cf"),
+    organizationId: organization.id,
+    entityType,
+    entityId,
+    key: parsed.key,
+    value: parsed.value,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  appState.customFields.unshift(field);
+  return field;
 }
 
 export function createUser(input: unknown, context?: AuthContext) {

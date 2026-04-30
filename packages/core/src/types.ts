@@ -56,6 +56,14 @@ export type PurchaseOrderStatus =
   | "COMPLETED"
   | "CANCELLED";
 export type WebhookSource = "SHOPIFY" | "WOOCOMMERCE";
+export type ExtensionWebhookStatus = "ACTIVE" | "PAUSED";
+export type ExtensionEventName =
+  | "order.created"
+  | "order.updated"
+  | "stock.changed"
+  | "invoice.issued"
+  | "product.updated"
+  | "purchase.received";
 export type WebhookEventStatus =
   | "PENDING"
   | "PROCESSING"
@@ -81,6 +89,8 @@ export type Organization = {
   id: string;
   name: string;
   slug: string;
+  defaultCurrency?: string;
+  locale?: string;
 };
 
 export type User = {
@@ -280,7 +290,8 @@ export type AuditAction =
   | "CANCEL"
   | "PICK"
   | "PACK"
-  | "SHIP";
+  | "SHIP"
+  | "STOCKTAKE";
 
 export type AuditLog = {
   id: string;
@@ -381,6 +392,55 @@ export type WebhookEvent = {
   attempts: number;
   receivedAt: string;
   processedAt?: string;
+};
+
+export type ExtensionWebhookSubscription = {
+  id: string;
+  organizationId: string;
+  url: string;
+  events: ExtensionEventName[];
+  secret?: string;
+  status: ExtensionWebhookStatus;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+export type CustomFieldValue = {
+  id: string;
+  organizationId: string;
+  entityType: string;
+  entityId: string;
+  key: string;
+  value: unknown;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+export type ExchangeRateProvider = "ECB" | "TCMB" | "MANUAL";
+
+export type ExchangeRate = {
+  id?: string;
+  baseCurrency: string;
+  quoteCurrency: string;
+  rate: number;
+  provider: ExchangeRateProvider;
+  observedAt: string;
+  createdAt?: string;
+};
+
+export type StockOpsPlugin = {
+  name: string;
+  version: string;
+  hooks: Partial<
+    Record<
+      ExtensionEventName,
+      (payload: {
+        organizationId: string;
+        event: ExtensionEventName;
+        data: unknown;
+      }) => Promise<void>
+    >
+  >;
 };
 
 export type NotificationDelivery = {
@@ -527,6 +587,9 @@ export type AppState = {
   sessions: Session[];
   apiTokens?: ApiToken[];
   webhookEvents?: WebhookEvent[];
+  webhookSubscriptions?: ExtensionWebhookSubscription[];
+  customFields?: CustomFieldValue[];
+  exchangeRates?: ExchangeRate[];
   notificationDeliveries?: NotificationDelivery[];
   billsOfMaterial?: BillOfMaterial[];
   manufacturingOrders?: ManufacturingOrder[];
@@ -558,6 +621,9 @@ export type AppSnapshot = {
   openPurchaseOrders: PurchaseOrder[];
   auditLogs: AuditLog[];
   webhookEvents: WebhookEvent[];
+  webhookSubscriptions: ExtensionWebhookSubscription[];
+  customFields: CustomFieldValue[];
+  exchangeRates: ExchangeRate[];
   notificationDeliveries: NotificationDelivery[];
   billsOfMaterial: BillOfMaterial[];
   manufacturingOrders: ManufacturingOrder[];

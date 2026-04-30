@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   BarChart3,
   Boxes,
+  Brain,
   ClipboardList,
   Factory,
   FileBarChart,
@@ -29,6 +30,7 @@ const navigation = [
   { href: "/invoices", label: "Faturalar", icon: FileText },
   { href: "/suppliers", label: "Tedarikçiler", icon: Truck },
   { href: "/analytics", label: "Analitik", icon: TrendingUp },
+  { href: "/forecasting", label: "Tahmin", icon: Brain },
   { href: "/reports", label: "Raporlar", icon: FileBarChart },
   { href: "/users", label: "Kullanıcılar", icon: Shield },
   { href: "/settings", label: "Ayarlar", icon: Settings },

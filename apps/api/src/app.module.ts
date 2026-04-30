@@ -9,6 +9,9 @@ import { PermissionsGuard } from "./auth/permissions.guard";
 import { StockOpsApiService } from "./domain/stockops-api.service";
 import { CustomersController } from "./customers/customers.controller";
 import { ExportsController } from "./exports/exports.controller";
+import { ExtensionsController } from "./extensions/extensions.controller";
+import { ForecastingController } from "./forecasting/forecasting.controller";
+import { ForecastingService } from "./forecasting/forecasting.service";
 import { HealthController } from "./health/health.controller";
 import { InventoryController } from "./inventory/inventory.controller";
 import { InvoicesController } from "./invoices/invoices.controller";
@@ -36,6 +39,8 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     AuthController,
     CustomersController,
     ExportsController,
+    ExtensionsController,
+    ForecastingController,
     HealthController,
     InventoryController,
     InvoicesController,
@@ -57,6 +62,7 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     ApiAuthGuard,
     ApiAuthService,
     EventsGateway,
+    ForecastingService,
     PermissionsGuard,
     StockOpsApiService,
     WebhookInboxService,

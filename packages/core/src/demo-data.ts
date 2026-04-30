@@ -9,6 +9,8 @@ export function createInitialState(): AppState {
         id: "org_kernel_guard",
         name: "KernelGuard StockOps",
         slug: "kernelguard",
+        defaultCurrency: "TRY",
+        locale: "tr",
       },
     ],
     users: [
@@ -196,6 +198,9 @@ export function createInitialState(): AppState {
     ],
     sessions: [],
     webhookEvents: [],
+    webhookSubscriptions: [],
+    customFields: [],
+    exchangeRates: [],
     notificationDeliveries: [],
     customers: [],
     invoices: [],
