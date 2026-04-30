@@ -18,6 +18,7 @@ export function InstallPrompt() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (window.localStorage?.getItem(DISMISS_KEY)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDismissed(true);
       return;
     }

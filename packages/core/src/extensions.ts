@@ -49,3 +49,34 @@ export function verifyWebhookSignature(
     timingSafeEqual(expectedBuffer, signatureBuffer)
   );
 }
+
+export class PluginManager {
+  private plugins: StockOpsPlugin[] = [];
+
+  register(plugin: StockOpsPlugin) {
+    this.plugins.push(validatePlugin(plugin));
+  }
+
+  async dispatch<T extends ExtensionEventName>(
+    eventName: T,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    payload: any,
+  ): Promise<void> {
+    if (!isExtensionEvent(eventName)) return;
+
+    for (const plugin of this.plugins) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const hook = plugin.hooks[eventName] as ((data: any) => Promise<void>) | undefined;
+      if (hook) {
+        try {
+          await hook(payload);
+        } catch (error) {
+          console.error(`[PluginManager] Plugin ${plugin.name} failed on hook ${eventName}:`, error);
+        }
+      }
+    }
+  }
+}
+
+export const globalPluginManager = new PluginManager();
+

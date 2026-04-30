@@ -11,6 +11,7 @@ import {
   generateSmartPurchaseSuggestions,
   type ForecastMethod,
 } from "@stockops/core/forecast";
+import { generateSmartPurchaseOrdersAction } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -206,6 +207,16 @@ export default async function ForecastingPage({
           </Panel>
 
           <Panel title="Akıllı satınalma önerileri">
+            {orgSuggestions.length > 0 && (
+              <div className="mb-4 flex justify-end">
+                <form action={async (formData) => { "use server"; await generateSmartPurchaseOrdersAction({ actionId: 0, message: "", status: "idle" as const }, formData); }}>
+                  <input type="hidden" name="suggestions" value={JSON.stringify(orgSuggestions)} />
+                  <button type="submit" className="rounded-md bg-[var(--accent-primary,#6366f1)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90">
+                    Önerileri Siparişe Çevir
+                  </button>
+                </form>
+              </div>
+            )}
             {orgSuggestions.length === 0 ? (
               <EmptyState>
                 Tahmine dayalı satınalma önerisi yok. Satış geçmişi biriktikçe

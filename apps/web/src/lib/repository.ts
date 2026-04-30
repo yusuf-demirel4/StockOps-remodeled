@@ -1,5 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { can } from "@stockops/core/inventory";
 import { getDataSourceMode } from "@/lib/data-source";
+import { globalPluginManager } from "@stockops/core/extensions";
+import type { SuggestedPurchaseOrder } from "@stockops/core/forecast";
 import {
   completeManufacturingOrder as completeDemoMo,
   confirmSalesOrder as confirmDemoSalesOrder,
@@ -126,7 +129,7 @@ function mapProduct(product: {
   description: string | null;
   minimumStock: number;
   isActive: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   unitPrice?: any;
 }): Product {
   return {
@@ -535,7 +538,7 @@ export async function getAppSnapshot(
       summary: auditLog.summary,
       createdAt: iso(auditLog.createdAt),
     })),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     billsOfMaterial: billsOfMaterial.map((b: any) => ({
       id: b.id,
       organizationId: b.organizationId,
@@ -543,7 +546,7 @@ export async function getAppSnapshot(
       name: b.name,
       description: b.description ?? undefined,
       isActive: b.isActive,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       components: (b.components ?? []).map((c: any) => ({
         id: c.id,
         bomId: c.bomId,
@@ -552,7 +555,7 @@ export async function getAppSnapshot(
         sortOrder: c.sortOrder,
       })),
     })),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     manufacturingOrders: manufacturingOrders.map((m: any) => ({
       id: m.id,
       organizationId: m.organizationId,
@@ -566,13 +569,13 @@ export async function getAppSnapshot(
       createdAt: iso(m.createdAt),
     })),
     webhookEvents: webhookEvents.map(mapWebhookEvent),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     webhookSubscriptions: webhookSubscriptions.map((item: any) =>
       mapWebhookSubscription(item),
     ),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     customFields: customFields.map((item: any) => mapCustomField(item)),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     exchangeRates: exchangeRates.map((item: any) => mapExchangeRate(item)),
     notificationDeliveries: notificationDeliveries.map(mapNotificationDelivery),
     permissions: {
@@ -595,7 +598,8 @@ export async function updateOrganizationSettings(
 
   ensurePermission(context, "manage_users");
   const parsed = organizationSettingsInputSchema.parse(input);
-  const updated = await getPrisma().organization.update({
+   
+  const updated = await (getPrisma() as any).organization.update({
     where: { id: context.organization.id },
     data: {
       defaultCurrency: parsed.defaultCurrency,
@@ -675,7 +679,8 @@ export async function recordStocktakeCount(
       data: {
         organizationId: context.organization.id,
         actorId: context.user.id,
-        action: "STOCKTAKE",
+         
+        action: "STOCKTAKE" as any,
         entityType: "StockMovement",
         entityId: created.id,
         summary: `${product.sku} stocktake adjusted by ${quantityChange}`,
@@ -870,6 +875,8 @@ export async function createProduct(input: unknown, context: AuthContext) {
     product.id,
     `${parsed.sku} ürünü oluşturuldu`,
   );
+
+  globalPluginManager.dispatch("product.updated", product).catch(console.error);
 }
 
 export async function updateProduct(
@@ -999,6 +1006,8 @@ export async function createStockMovement(input: unknown, context: AuthContext) 
     movement.id,
     `${parsed.type} hareketi kaydedildi`,
   );
+
+  globalPluginManager.dispatch("stock.changed", { productId: parsed.productId, quantityChange }).catch(console.error);
 }
 
 export async function createStockTransfer(input: unknown, context: AuthContext) {
@@ -1329,6 +1338,8 @@ export async function createSalesOrder(input: unknown, context: AuthContext) {
     order.id,
     `${order.code} satış siparişi oluşturuldu`,
   );
+
+  globalPluginManager.dispatch("order.created", order).catch(console.error);
 }
 
 export async function confirmSalesOrder(orderId: string, context: AuthContext) {
@@ -1869,7 +1880,7 @@ export async function createUser(input: unknown, context: AuthContext) {
       data: {
         organizationId: context.organization.id,
         userId: user.id,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         role: parsed.role as any,
       },
     });
@@ -1916,7 +1927,7 @@ export async function updateUserRole(
 
   await prisma.membership.update({
     where: { id: membership.id },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     data: { role: parsed.role as any },
   });
 
@@ -2202,8 +2213,6 @@ export async function completeManufacturingOrder(moId: string, context: AuthCont
   });
 }
 
-/* eslint-enable @typescript-eslint/no-explicit-any */
-
 function nextCode(prefix: string, count: number) {
   return `${prefix}-${String(count + 1001).padStart(4, "0")}`;
 }
@@ -2238,7 +2247,7 @@ export async function getSalesOrderDetails(orderId: string, context: AuthContext
       lines: order.lines.map(l => ({ ...l, id: l.productId, product: snapshot.products.find(p => p.id === l.productId)! })),
       pickListItems: [],
       shipments: []
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     } as any;
     return { order: mockOrder, pickLists: [] };
   }
@@ -2279,16 +2288,12 @@ export async function startPicking(orderId: string, context: AuthContext) {
       throw new Error("Sipariş veya depo bulunamadı (Siparişin durumu ONAYLANDI olmalıdır).");
     }
 
-    const count = await tx.pickList.count({
-      where: { organizationId: context.organization.id },
-    });
-    
     await tx.salesOrder.update({
       where: { id: order.id },
       data: { status: "PICKING" },
     });
 
-    const pickList = await tx.pickList.create({
+    await tx.pickList.create({
       data: {
         organizationId: context.organization.id,
         warehouseId: warehouse.id,
@@ -2513,3 +2518,60 @@ export async function deliverOrder(orderId: string, context: AuthContext) {
     });
   });
 }
+
+export async function generateSmartPurchaseOrders(
+  suggestions: SuggestedPurchaseOrder[],
+  context: AuthContext,
+) {
+  if (!dbMode()) return;
+  ensurePermission(context, "manage_purchasing");
+
+  const prisma = getPrisma();
+
+  await prisma.$transaction(async (tx) => {
+    for (const suggestion of suggestions) {
+      if (suggestion.recommendedQuantity <= 0) continue;
+
+      const product = await tx.product.findFirst({
+        where: { id: suggestion.productId, organizationId: context.organization.id },
+      });
+      if (!product) continue;
+
+      const count = await tx.purchaseOrder.count({
+        where: { organizationId: context.organization.id },
+      });
+
+      const supplier = await tx.supplier.findFirst({
+        where: { organizationId: context.organization.id, products: { some: { productId: product.id } } },
+      });
+
+      if (!supplier) continue;
+
+      const code = `PO-${String(count + 1001).padStart(4, "0")}`;
+
+      const order = await tx.purchaseOrder.create({
+        data: {
+          organizationId: context.organization.id,
+          code,
+          supplierId: supplier.id,
+          status: "DRAFT",
+          lines: {
+            create: [{ productId: product.id, quantity: suggestion.recommendedQuantity }],
+          },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: context.organization.id,
+          actorId: context.user.id,
+          action: "CREATE",
+          entityType: "PurchaseOrder",
+          entityId: order.id,
+          summary: `${code} akıllı satınalma siparişi AI önerisiyle oluşturuldu`,
+        },
+      });
+    }
+  });
+}
+

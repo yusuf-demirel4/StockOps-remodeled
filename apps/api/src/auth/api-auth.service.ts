@@ -101,8 +101,10 @@ export class ApiAuthService {
         id: apiToken.organization.id,
         name: apiToken.organization.name,
         slug: apiToken.organization.slug,
-        defaultCurrency: apiToken.organization.defaultCurrency,
-        locale: apiToken.organization.locale,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        defaultCurrency: (apiToken.organization as any).defaultCurrency ?? "TRY",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        locale: (apiToken.organization as any).locale ?? "tr-TR",
       },
       role: membership.role as Role,
       sessionToken: token,

@@ -768,3 +768,23 @@ export async function completeManufacturingOrderAction(
     )
   );
 }
+
+export async function generateSmartPurchaseOrdersAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  const suggestionsRaw = value(formData, "suggestions");
+  if (!suggestionsRaw) return failure(new Error("Öneriler bulunamadı."));
+
+  try {
+    const suggestions = JSON.parse(suggestionsRaw);
+    return runMutation("Önerilen satınalma siparişleri oluşturuldu.", (context) =>
+      import("@/lib/repository").then((m) =>
+        m.generateSmartPurchaseOrders(suggestions, context)
+      )
+    );
+  } catch (error) {
+    return failure(error);
+  }
+}
+

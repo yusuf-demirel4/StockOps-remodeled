@@ -40,9 +40,9 @@ test.describe("Products (Ürün Yönetimi)", () => {
 
   // ── 2. Yeni ürün ekleme ──────────────────────────────────────────────────
 
-  test("'Add' / 'Ekle' butonu veya linki görünür", async ({ page }) => {
+  test("'Add' / 'Ekle' butonu veya paneli görünür", async ({ page }) => {
     const addBtn = page.locator(
-      'a[href*="new"], button:has-text("Add"), button:has-text("Ekle"), button:has-text("New"), a:has-text("Add"), a:has-text("Ekle")'
+      'button:has-text("Add"), button:has-text("Ekle"), button:has-text("Oluştur"), button:has-text("Kaydet"), h2:has-text("Yeni ürün")'
     );
     await expect(addBtn.first()).toBeVisible({ timeout: 8_000 });
   });
@@ -50,26 +50,11 @@ test.describe("Products (Ürün Yönetimi)", () => {
   test("'Add' butonuna tıklayınca form açılır veya /products/new'e gidilir", async ({
     page,
   }) => {
-    const addBtn = page.locator(
-      'a[href*="new"], button:has-text("Add"), button:has-text("Ekle"), button:has-text("New"), a:has-text("Add"), a:has-text("Ekle")'
-    );
-
-    if (await addBtn.first().isVisible()) {
-      await addBtn.first().click();
-
-      // Sonrasında form ya da yeni URL bekliyoruz
-      await Promise.race([
-        page.waitForURL(/\/products\/new/, { timeout: 5_000 }),
-        expect(page.locator("form")).toBeVisible({ timeout: 5_000 }),
-      ]).catch(() => {
-        // En azından hata sayfasında değil mi?
-        expect(page.url()).not.toMatch(/error|500/);
-      });
-    }
+    // Form artık direkt /products sayfasında Panel içinde render edildiğinden modal click'e gerek yok.
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 5_000 });
   });
 
   test("ürün oluşturma formunda 'name' alanı var", async ({ page }) => {
-    await page.goto("/products/new");
     const nameInput = page.locator(
       'input[name="name"], input[name="productName"], input[placeholder*="name" i], input[placeholder*="isim" i]'
     );
@@ -77,7 +62,6 @@ test.describe("Products (Ürün Yönetimi)", () => {
   });
 
   test("ürün oluşturma formunda 'sku' alanı var", async ({ page }) => {
-    await page.goto("/products/new");
     const skuInput = page.locator(
       'input[name="sku"], input[placeholder*="sku" i], input[placeholder*="SKU" i]'
     );

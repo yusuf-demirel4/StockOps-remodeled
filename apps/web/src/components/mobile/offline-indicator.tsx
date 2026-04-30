@@ -9,9 +9,11 @@ export function OfflineIndicator() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnline(navigator.onLine);
 
     const handleOnline = () => setOnline(true);
+     
     const handleOffline = () => setOnline(false);
 
     window.addEventListener("online", handleOnline);

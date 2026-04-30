@@ -47,8 +47,6 @@ type Toast =
   | { kind: "error"; message: string }
   | null;
 
-const idleState = { actionId: 0, message: "", status: "idle" as const };
-
 export function MobilePickList({ confirmedOrders, pickingJobs }: Props) {
   const router = useRouter();
   const [activeJobId, setActiveJobId] = useState(pickingJobs[0]?.pickListId ?? "");
@@ -89,10 +87,10 @@ export function MobilePickList({ confirmedOrders, pickingJobs }: Props) {
   };
 
   const runAction = async (
-    action: (state: typeof idleState, data: FormData) => Promise<typeof idleState>,
+    action: (state: import("@/lib/action-state").ActionState, data: FormData) => Promise<import("@/lib/action-state").ActionState>,
     formData: FormData,
   ) => {
-    const result = await action(idleState, formData);
+    const result = await action({ actionId: 0, message: "", status: "idle" }, formData);
     setToast({
       kind: result.status === "success" ? "success" : "error",
       message: result.message,

@@ -141,10 +141,11 @@ export async function getAuthContext(): Promise<AuthContext | null> {
       id: session.organization.id,
       name: session.organization.name,
       slug: session.organization.slug,
-      defaultCurrency: session.organization.defaultCurrency,
-      locale: session.organization.locale,
-    },
-    role: membership.role as Role,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      defaultCurrency: (session.organization as any).defaultCurrency ?? "TRY",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      locale: (session.organization as any).locale ?? "tr-TR",
+      },    role: membership.role as Role,
     sessionToken: token,
   };
 }

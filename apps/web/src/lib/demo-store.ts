@@ -43,7 +43,6 @@ import type {
   CustomFieldValue,
   ExtensionWebhookSubscription,
   ManufacturingOrder,
-  ManufacturingOrderStatus,
   Member,
   NotificationDelivery,
   Product,

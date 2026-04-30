@@ -57,8 +57,44 @@ export function StocktakeForm({ products, warehouses, stockRows }: Props) {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshQueueCount();
   }, []);
+
+  const submitPayload = async (payload: QueuedStocktake) => {
+    const formData = new FormData();
+    formData.set("productId", payload.productId);
+    formData.set("warehouseId", payload.warehouseId);
+    formData.set("countedQuantity", String(payload.countedQuantity));
+    formData.set("note", payload.note ?? "");
+    const result = await recordStocktakeAction(idleState, formData);
+    setToast({
+      kind: result.status === "success" ? "success" : "error",
+      message: result.message,
+    });
+    if (result.status === "success") {
+      setCountedQuantity("");
+      router.refresh();
+    }
+    return result.status === "success";
+  };
+
+  const syncQueue = async () => {
+    if (!navigator.onLine) return;
+    const items = await listQueue();
+    const stocktakeItems = items.filter((item) => item.kind === "stocktake-count");
+
+    for (const item of stocktakeItems) {
+      const ok = await submitPayload(item.payload as QueuedStocktake);
+      if (ok) {
+        await removeFromQueue(item.id);
+      } else {
+        break;
+      }
+    }
+
+    await refreshQueueCount();
+  };
 
   useEffect(() => {
     const sync = () => {
@@ -77,24 +113,6 @@ export function StocktakeForm({ products, warehouses, stockRows }: Props) {
     }
     setProductId(product.id);
     setToast({ kind: "success", message: `${product.sku} secildi.` });
-  };
-
-  const submitPayload = async (payload: QueuedStocktake) => {
-    const formData = new FormData();
-    formData.set("productId", payload.productId);
-    formData.set("warehouseId", payload.warehouseId);
-    formData.set("countedQuantity", String(payload.countedQuantity));
-    formData.set("note", payload.note ?? "");
-    const result = await recordStocktakeAction(idleState, formData);
-    setToast({
-      kind: result.status === "success" ? "success" : "error",
-      message: result.message,
-    });
-    if (result.status === "success") {
-      setCountedQuantity("");
-      router.refresh();
-    }
-    return result.status === "success";
   };
 
   const submit = () => {
@@ -123,23 +141,6 @@ export function StocktakeForm({ products, warehouses, stockRows }: Props) {
         await submitPayload(payload);
       })();
     });
-  };
-
-  const syncQueue = async () => {
-    if (!navigator.onLine) return;
-    const items = await listQueue();
-    const stocktakeItems = items.filter((item) => item.kind === "stocktake-count");
-
-    for (const item of stocktakeItems) {
-      const ok = await submitPayload(item.payload as QueuedStocktake);
-      if (ok) {
-        await removeFromQueue(item.id);
-      } else {
-        break;
-      }
-    }
-
-    await refreshQueueCount();
   };
 
   return (
