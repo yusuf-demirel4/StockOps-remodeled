@@ -6,7 +6,7 @@
  * StockBalance table in sync with the ledger at all times.
  *
  * Uses SELECT … FOR UPDATE to serialize concurrent writes to the
- * same (org, product, warehouse) tuple.
+ * same (org, product, warehouse, bin, lot, serial) tuple.
  */
 
 type TxClient = {
@@ -34,6 +34,9 @@ export async function lockBalance(
   organizationId: string,
   productId: string,
   warehouseId: string,
+  binId: string | null = null,
+  lotNumber: string | null = null,
+  serialNumber: string | null = null,
 ): Promise<BalanceRow> {
   // Try to lock existing row
   const rows: BalanceRow[] = await tx.$queryRawUnsafe(
@@ -41,10 +44,16 @@ export async function lockBalance(
             "onHand", "reserved", "available", "version"
      FROM "StockBalance"
      WHERE "organizationId" = $1 AND "productId" = $2 AND "warehouseId" = $3
+       AND "binId" IS NOT DISTINCT FROM $4
+       AND "lotNumber" IS NOT DISTINCT FROM $5
+       AND "serialNumber" IS NOT DISTINCT FROM $6
      FOR UPDATE`,
     organizationId,
     productId,
     warehouseId,
+    binId,
+    lotNumber,
+    serialNumber
   );
 
   if (rows.length > 0) {
@@ -58,36 +67,38 @@ export async function lockBalance(
   }
 
   // Row doesn't exist — insert and lock
-  const inserted: BalanceRow[] = await tx.$queryRawUnsafe(
-    `INSERT INTO "StockBalance" ("id", "organizationId", "productId", "warehouseId", "onHand", "reserved", "available", "version", "updatedAt")
-     VALUES (gen_random_uuid(), $1, $2, $3, 0, 0, 0, 0, NOW())
-     ON CONFLICT ("organizationId", "productId", "warehouseId") DO NOTHING
-     RETURNING "id", "organizationId", "productId", "warehouseId", "onHand", "reserved", "available", "version"`,
+  // Using an explicit ID so we can query it back if ON CONFLICT DO NOTHING kicks in due to nulls in postgres
+  const newId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+  
+  await tx.$executeRawUnsafe(
+    `INSERT INTO "StockBalance" ("id", "organizationId", "productId", "warehouseId", "binId", "lotNumber", "serialNumber", "onHand", "reserved", "available", "version", "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 0, 0, 0, NOW())
+     ON CONFLICT ("organizationId", "productId", "warehouseId", "binId", "lotNumber", "serialNumber") DO NOTHING`,
+    newId,
     organizationId,
     productId,
     warehouseId,
+    binId,
+    lotNumber,
+    serialNumber
   );
 
-  if (inserted.length > 0) {
-    return {
-      ...inserted[0],
-      onHand: Number(inserted[0].onHand),
-      reserved: Number(inserted[0].reserved),
-      available: Number(inserted[0].available),
-      version: Number(inserted[0].version),
-    };
-  }
-
-  // Race: another tx inserted between our SELECT and INSERT — re-lock
+  // Re-lock
   const retry: BalanceRow[] = await tx.$queryRawUnsafe(
     `SELECT "id", "organizationId", "productId", "warehouseId",
             "onHand", "reserved", "available", "version"
      FROM "StockBalance"
      WHERE "organizationId" = $1 AND "productId" = $2 AND "warehouseId" = $3
+       AND "binId" IS NOT DISTINCT FROM $4
+       AND "lotNumber" IS NOT DISTINCT FROM $5
+       AND "serialNumber" IS NOT DISTINCT FROM $6
      FOR UPDATE`,
     organizationId,
     productId,
     warehouseId,
+    binId,
+    lotNumber,
+    serialNumber
   );
 
   return {
@@ -100,7 +111,7 @@ export async function lockBalance(
 }
 
 /**
- * Adjust onHand by `delta` and recalculate `available`.
+ * Adjust onHand by \`delta\` and recalculate \`available\`.
  * Must be called inside a transaction after lockBalance.
  */
 export async function adjustBalance(
@@ -109,8 +120,11 @@ export async function adjustBalance(
   productId: string,
   warehouseId: string,
   delta: number,
+  binId: string | null = null,
+  lotNumber: string | null = null,
+  serialNumber: string | null = null,
 ): Promise<BalanceRow> {
-  const bal = await lockBalance(tx, organizationId, productId, warehouseId);
+  const bal = await lockBalance(tx, organizationId, productId, warehouseId, binId, lotNumber, serialNumber);
   const newOnHand = bal.onHand + delta;
   const newAvailable = newOnHand - bal.reserved;
 
@@ -141,8 +155,11 @@ export async function adjustReservation(
   productId: string,
   warehouseId: string,
   reserveDelta: number,
+  binId: string | null = null,
+  lotNumber: string | null = null,
+  serialNumber: string | null = null,
 ): Promise<BalanceRow> {
-  const bal = await lockBalance(tx, organizationId, productId, warehouseId);
+  const bal = await lockBalance(tx, organizationId, productId, warehouseId, binId, lotNumber, serialNumber);
   const newReserved = bal.reserved + reserveDelta;
   const newAvailable = bal.onHand - newReserved;
 
@@ -157,6 +174,7 @@ export async function adjustReservation(
 
   return {
     ...bal,
+    onHand: bal.onHand,
     reserved: newReserved,
     available: newAvailable,
     version: bal.version + 1,

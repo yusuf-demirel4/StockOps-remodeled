@@ -706,13 +706,13 @@ export class StockOpsApiService {
     filters?: { cursor?: string; limit?: number },
   ) {
     if (dbMode()) {
-      return this.listDatabaseStockRows(context, filters);
+      const result = await this.listDatabaseStockRows(context, filters);
+      // Flatten for backward compatibility if no explicit pagination is requested, or just always flatten if the controller expects array
+      // Wait, the API spec says `arrayOf(stockRowSchema)`, so we MUST return an array.
+      return result.data;
     }
 
-    return {
-      data: this.listDemoStockRows(context),
-      pagination: { total: 0, limit: 50, cursor: null, hasMore: false },
-    };
+    return this.listDemoStockRows(context);
   }
 
   async listCriticalStockRows(context: AuthContext) {
@@ -735,17 +735,11 @@ export class StockOpsApiService {
         context.organization.id,
       );
 
-      return {
-        data: rows.map(mapBalanceToStockRow),
-        pagination: { total: rows.length, limit: rows.length, cursor: null, hasMore: false },
-      };
+      return rows.map(mapBalanceToStockRow);
     }
 
     const allRows = this.listDemoStockRows(context);
-    return {
-      data: allRows.filter((row) => row.isCritical),
-      pagination: { total: 0, limit: 50, cursor: null, hasMore: false },
-    };
+    return allRows.filter((row) => row.isCritical);
   }
 
   async listStockMovements(
@@ -2234,6 +2228,49 @@ export class StockOpsApiService {
         data: { status: "PICKING" },
       });
 
+      const pickListItemsToCreate: any[] = [];
+
+      for (const line of order.lines) {
+        const product = await tx.product.findUnique({ where: { id: line.productId } });
+        let remainingQty = line.quantity;
+
+        const layers = await tx.inventoryLayer.findMany({
+          where: {
+            productId: line.productId,
+            warehouseId: warehouse.id,
+            quantity: { gt: 0 },
+            organizationId: context.organization.id,
+          },
+          orderBy: product?.isBatchTracked ? { expiryDate: "asc" } : { receivedAt: "asc" },
+        });
+
+        for (const layer of layers) {
+          if (remainingQty <= 0) break;
+          const qtyToTake = Math.min(layer.quantity, remainingQty);
+
+          pickListItemsToCreate.push({
+            salesOrderId: order.id,
+            productId: line.productId,
+            quantity: qtyToTake,
+            pickedQty: 0,
+            binId: layer.binId,
+            lotNumber: layer.lotNumber,
+            serialNumber: layer.serialNumber,
+            expiryDate: layer.expiryDate,
+          });
+          remainingQty -= qtyToTake;
+        }
+
+        if (remainingQty > 0) {
+          pickListItemsToCreate.push({
+            salesOrderId: order.id,
+            productId: line.productId,
+            quantity: remainingQty,
+            pickedQty: 0,
+          });
+        }
+      }
+
       const pickList = await tx.pickList.create({
         data: {
           organizationId: context.organization.id,
@@ -2241,12 +2278,7 @@ export class StockOpsApiService {
           status: "PENDING",
           priority: 0,
           items: {
-            create: order.lines.map((line: any) => ({
-              salesOrderId: order.id,
-              productId: line.productId,
-              quantity: line.quantity,
-              pickedQty: 0,
-            })),
+            create: pickListItemsToCreate,
           },
         },
       });
@@ -2413,6 +2445,42 @@ export class StockOpsApiService {
       });
     }
 
+    // Update SalesOrderLine and SalesOrder status
+    const allItemsForProduct = pickList.items.filter((i: any) => i.productId === item.productId);
+    const sumPickedForProduct = allItemsForProduct.reduce((acc: number, i: any) => i.id === itemId ? acc + pickedQty : acc + i.pickedQty, 0);
+
+    const sol = await prisma.salesOrderLine.findFirst({
+      where: { salesOrderId: item.salesOrderId, productId: item.productId }
+    });
+    if (sol) {
+      await prisma.salesOrderLine.update({
+        where: { id: sol.id },
+        data: { pickedQty: sumPickedForProduct }
+      });
+    }
+
+    const order = await prisma.salesOrder.findUnique({
+      where: { id: item.salesOrderId },
+      include: { lines: true }
+    });
+    if (order) {
+      const totalOrdered = order.lines.reduce((acc: number, l: any) => acc + l.quantity, 0);
+      // Re-sum all pickedQty across all pickListItems for this order
+      const allOrderPickItems = await prisma.pickListItem.findMany({ where: { salesOrderId: order.id } });
+      const totalPicked = allOrderPickItems.reduce((acc: number, p: any) => p.id === itemId ? acc + pickedQty : acc + p.pickedQty, 0);
+
+      let newStatus = order.status;
+      if (totalPicked >= totalOrdered) newStatus = "PICKED";
+      else if (totalPicked > 0) newStatus = "PARTIALLY_PICKED";
+
+      if (newStatus !== order.status) {
+        await prisma.salesOrder.update({
+          where: { id: order.id },
+          data: { status: newStatus as any }
+        });
+      }
+    }
+
     return {
       itemId,
       pickedQty,
@@ -2428,17 +2496,17 @@ export class StockOpsApiService {
         where: {
           id: orderId,
           organizationId: context.organization.id,
-          status: "PICKING",
+          status: { in: ["PICKING", "PARTIALLY_PICKED", "PICKED"] },
         },
+        include: { lines: true }
       });
 
       if (!order) {
         throw new NotFoundException(
-          "Sales order not found or not in PICKING status.",
+          "Sales order not found or not in a pickable status.",
         );
       }
 
-      // Validate all items are fully picked
       const pickLists = await tx.pickList.findMany({
         where: { organizationId: context.organization.id },
         include: {
@@ -2447,17 +2515,24 @@ export class StockOpsApiService {
       });
 
       const allItems = pickLists.flatMap((pl: any) => pl.items);
-      const unpicked = allItems.filter((item: any) => item.pickedQty < item.quantity);
+      const totalQuantity = order.lines.reduce((sum: number, l: any) => sum + l.quantity, 0);
+      let totalPacked = 0;
 
-      if (unpicked.length > 0) {
-        throw new BadRequestException(
-          `${unpicked.length} item(s) not fully picked. Complete picking before packing.`,
-        );
+      for (const line of order.lines) {
+        const lineItems = allItems.filter((i: any) => i.productId === line.productId);
+        const pickedForLine = lineItems.reduce((sum: number, i: any) => sum + i.pickedQty, 0);
+        await tx.salesOrderLine.update({
+          where: { id: line.id },
+          data: { packedQty: pickedForLine }
+        });
+        totalPacked += pickedForLine;
       }
+
+      const newStatus = totalPacked >= totalQuantity ? "PACKED" : "PARTIALLY_PACKED";
 
       await tx.salesOrder.update({
         where: { id: order.id },
-        data: { status: "PACKED" },
+        data: { status: newStatus as any },
       });
 
       // Complete related pick lists
@@ -2477,11 +2552,11 @@ export class StockOpsApiService {
           action: "PACK",
           entityType: "SalesOrder",
           entityId: order.id,
-          summary: `${order.code} → PACKED`,
+          summary: `${order.code} → ${newStatus}`,
         },
       });
 
-      return { orderId: order.id, status: "PACKED" as const };
+      return { orderId: order.id, status: newStatus };
     });
   }
 
@@ -2497,17 +2572,17 @@ export class StockOpsApiService {
         where: {
           id: orderId,
           organizationId: context.organization.id,
-          status: "PACKED",
+          status: { in: ["PACKED", "PARTIALLY_PACKED", "PARTIALLY_SHIPPED"] },
         },
+        include: { lines: true }
       });
 
       if (!order) {
         throw new NotFoundException(
-          "Sales order not found or not in PACKED status.",
+          "Sales order not found or not in a shippable status.",
         );
       }
 
-      // Generate shipment code
       const existingShipments = await tx.shipment.findMany({
         where: { organizationId: context.organization.id },
         select: { code: true },
@@ -2526,7 +2601,6 @@ export class StockOpsApiService {
       while (usedNumbers.has(next)) next++;
       const shipmentCode = `SHP-${String(next).padStart(4, "0")}`;
 
-      // Build tracking URL
       let trackingUrl: string | null = null;
       if (body.carrier && body.trackingNumber) {
         const carrierUrls: Record<string, string> = {
@@ -2544,26 +2618,39 @@ export class StockOpsApiService {
         }
       }
 
+      const totalQuantity = order.lines.reduce((sum: number, l: any) => sum + l.quantity, 0);
+      let totalShipped = 0;
+
+      for (const line of order.lines) {
+        const toShip = line.packedQty - line.shippedQty;
+        if (toShip > 0) {
+          await tx.salesOrderLine.update({
+            where: { id: line.id },
+            data: { shippedQty: line.shippedQty + toShip }
+          });
+
+          // Release reservation for the shipped quantity
+          const res = await tx.stockReservation.findFirst({
+            where: { organizationId: context.organization.id, salesOrderId: order.id, productId: line.productId }
+          });
+          if (res && res.quantity > 0) {
+            const releaseQty = Math.min(res.quantity, toShip);
+            await adjustReservation(tx, context.organization.id, res.productId, res.warehouseId, -releaseQty);
+            if (res.quantity - releaseQty <= 0) {
+               await tx.stockReservation.delete({ where: { id: res.id } });
+            } else {
+               await tx.stockReservation.update({ where: { id: res.id }, data: { quantity: res.quantity - releaseQty } });
+            }
+          }
+        }
+        totalShipped += line.shippedQty + Math.max(0, toShip);
+      }
+
+      const newStatus = totalShipped >= totalQuantity ? "SHIPPED" : "PARTIALLY_SHIPPED";
+
       await tx.salesOrder.update({
         where: { id: order.id },
-        data: { status: "SHIPPED" },
-      });
-
-      // Release reservations on shipment
-      const reservations = await tx.stockReservation.findMany({
-        where: { organizationId: context.organization.id, salesOrderId: order.id },
-      });
-      for (const res of reservations) {
-        await adjustReservation(
-          tx,
-          context.organization.id,
-          res.productId,
-          res.warehouseId,
-          -res.quantity,
-        );
-      }
-      await tx.stockReservation.deleteMany({
-        where: { organizationId: context.organization.id, salesOrderId: order.id },
+        data: { status: newStatus as any },
       });
 
       const shipment = await tx.shipment.create({
@@ -2588,13 +2675,13 @@ export class StockOpsApiService {
           action: "SHIP",
           entityType: "SalesOrder",
           entityId: order.id,
-          summary: `${order.code} → SHIPPED, Shipment ${shipment.code}`,
+          summary: `${order.code} → ${newStatus}, Shipment ${shipment.code}`,
         },
       });
 
       return {
         orderId: order.id,
-        status: "SHIPPED" as const,
+        status: newStatus,
         shipment: {
           id: shipment.id,
           code: shipment.code,
@@ -2655,6 +2742,107 @@ export class StockOpsApiService {
       });
 
       return { orderId: order.id, status: "DELIVERED" as const };
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cycle Counts / Stocktake (Phase 9)
+  // ---------------------------------------------------------------------------
+
+  async createStocktake(warehouseId: string, assignedToId: string | null, context: AuthContext) {
+    const prisma = getPrisma();
+    const count = await prisma.stocktake.create({
+      data: {
+        organizationId: context.organization.id,
+        warehouseId,
+        assignedToId,
+        status: "DRAFT",
+      },
+    });
+
+    await this.audit(context, "CREATE", "Stocktake", count.id, "Created cycle count");
+    return count;
+  }
+
+  async addStocktakeItem(stocktakeId: string, productId: string, binId: string | null, expectedQty: number, context: AuthContext) {
+    const prisma = getPrisma();
+    return await prisma.stocktakeItem.create({
+      data: {
+        stocktakeId,
+        productId,
+        binId,
+        expectedQty,
+        status: "PENDING",
+      },
+    });
+  }
+
+  async submitStocktakeCount(stocktakeId: string, itemId: string, countedQty: number, context: AuthContext) {
+    const prisma = getPrisma();
+    const item = await prisma.stocktakeItem.findUnique({ where: { id: itemId } });
+    if (!item) throw new NotFoundException("Item not found.");
+    
+    return await prisma.stocktakeItem.update({
+      where: { id: itemId },
+      data: {
+        countedQty,
+        variance: countedQty - item.expectedQty,
+        status: "COUNTED",
+      },
+    });
+  }
+
+  async completeStocktake(stocktakeId: string, context: AuthContext) {
+    const prisma = getPrisma();
+    return await prisma.stocktake.update({
+      where: { id: stocktakeId },
+      data: { status: "REVIEW", completedAt: new Date() },
+    });
+  }
+
+  async approveStocktakeVariance(stocktakeId: string, context: AuthContext) {
+    const prisma = getPrisma();
+    return await prisma.$transaction(async (tx: any) => {
+      const stocktake = await tx.stocktake.findUnique({
+        where: { id: stocktakeId },
+        include: { items: true },
+      });
+
+      if (!stocktake) throw new NotFoundException("Stocktake not found.");
+
+      for (const item of stocktake.items) {
+        if (item.variance !== null && item.variance !== 0 && item.status !== "REJECTED") {
+          await tx.stocktakeItem.update({ where: { id: item.id }, data: { status: "APPROVED" } });
+          
+          await tx.stockMovement.create({
+            data: {
+              organizationId: context.organization.id,
+              warehouseId: stocktake.warehouseId,
+              productId: item.productId,
+              binId: item.binId,
+              type: "ADJUSTMENT",
+              quantityChange: item.variance,
+              note: "Cycle count variance approved",
+              createdById: context.user.id,
+            },
+          });
+          
+          await adjustBalance(
+            tx,
+            context.organization.id,
+            item.productId,
+            stocktake.warehouseId,
+            item.variance,
+          );
+        }
+      }
+
+      const updated = await tx.stocktake.update({
+        where: { id: stocktakeId },
+        data: { status: "COMPLETED" },
+      });
+      await this.audit(context, "STOCKTAKE", "Stocktake", stocktake.id, "Approved variance");
+      return updated;
     });
   }
 

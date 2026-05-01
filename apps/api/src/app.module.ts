@@ -24,6 +24,7 @@ import { ProductsController } from "./products/products.controller";
 import { VariantsController } from "./products/variants.controller";
 import { EventsGateway } from "./realtime/events.gateway";
 import { StockController } from "./stock/stock.controller";
+import { StocktakeController } from "./stock/stocktake.controller";
 import { SuppliersController } from "./suppliers/suppliers.controller";
 import { WebhookInboxService } from "./webhooks/webhook-inbox.service";
 import { WebhookSecretGuard } from "./webhooks/webhook-secret.guard";
