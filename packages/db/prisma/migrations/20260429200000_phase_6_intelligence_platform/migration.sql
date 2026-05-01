@@ -18,9 +18,9 @@ CREATE TABLE "ExchangeRate" (
   CONSTRAINT "ExchangeRate_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "ExchangeRate_organizationId_provider_baseCurrency_quoteCurrency_observedAt_key"
+CREATE UNIQUE INDEX "ExchangeRate_organizationId_provider_baseCurrency_quoteCurr_key"
   ON "ExchangeRate"("organizationId", "provider", "baseCurrency", "quoteCurrency", "observedAt");
-CREATE INDEX "ExchangeRate_organizationId_baseCurrency_quoteCurrency_observedAt_idx"
+CREATE INDEX "ExchangeRate_organizationId_baseCurrency_quoteCurrency_obse_idx"
   ON "ExchangeRate"("organizationId", "baseCurrency", "quoteCurrency", "observedAt");
 
 ALTER TABLE "ExchangeRate"

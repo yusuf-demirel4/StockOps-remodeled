@@ -15,10 +15,6 @@ ALTER TABLE "SalesOrder" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "SalesOrderLine" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "PurchaseOrder" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "PurchaseOrderLine" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Customer" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Invoice" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "InvoiceLine" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Payment" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "AuditLog" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "InventoryLayer" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "COGSEntry" ENABLE ROW LEVEL SECURITY;
@@ -37,15 +33,6 @@ CREATE POLICY tenant_isolation_sales_order ON "SalesOrder"
   USING ("organizationId" = current_setting('app.current_organization_id', true));
 
 CREATE POLICY tenant_isolation_purchase_order ON "PurchaseOrder"
-  USING ("organizationId" = current_setting('app.current_organization_id', true));
-
-CREATE POLICY tenant_isolation_customer ON "Customer"
-  USING ("organizationId" = current_setting('app.current_organization_id', true));
-
-CREATE POLICY tenant_isolation_invoice ON "Invoice"
-  USING ("organizationId" = current_setting('app.current_organization_id', true));
-
-CREATE POLICY tenant_isolation_payment ON "Payment"
   USING ("organizationId" = current_setting('app.current_organization_id', true));
 
 CREATE POLICY tenant_isolation_audit_log ON "AuditLog"
@@ -71,13 +58,6 @@ CREATE POLICY tenant_isolation_purchase_order_line ON "PurchaseOrderLine"
     SELECT 1 FROM "PurchaseOrder"
     WHERE "PurchaseOrder"."id" = "PurchaseOrderLine"."purchaseOrderId"
       AND "PurchaseOrder"."organizationId" = current_setting('app.current_organization_id', true)
-  ));
-
-CREATE POLICY tenant_isolation_invoice_line ON "InvoiceLine"
-  USING (EXISTS (
-    SELECT 1 FROM "Invoice"
-    WHERE "Invoice"."id" = "InvoiceLine"."invoiceId"
-      AND "Invoice"."organizationId" = current_setting('app.current_organization_id', true)
   ));
 
 -- IMPORTANT: The superuser / migration user bypasses RLS by default.

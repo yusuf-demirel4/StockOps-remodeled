@@ -28,7 +28,7 @@ CREATE TABLE "COGSEntry" (
 );
 
 -- CreateIndex
-CREATE INDEX "InventoryLayer_organizationId_productId_warehouseId_receiv_idx"
+CREATE INDEX "InventoryLayer_organizationId_productId_warehouseId_receive_idx"
   ON "InventoryLayer"("organizationId", "productId", "warehouseId", "receivedAt");
 
 CREATE INDEX "COGSEntry_organizationId_productId_idx"
