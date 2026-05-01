@@ -10,12 +10,15 @@ import { SentryExceptionFilter } from "./filters/sentry-exception.filter";
 import { metricsMiddleware } from "./metrics/metrics.middleware";
 import { configureOpenApi } from "./openapi/setup";
 import { initSentry } from "./sentry";
+import { validateApiEnvironment } from "./config/env";
 
 initSentry();
 
 const logger = createLogger({ service: "stockops-api" });
 
 async function bootstrap() {
+  validateApiEnvironment();
+
   const app = await NestFactory.create(AppModule, {
     logger:
       process.env.NODE_ENV === "test"
@@ -24,11 +27,19 @@ async function bootstrap() {
     rawBody: true,
   });
 
-  app.use(helmet());
+  app.use(helmet({
+    crossOriginEmbedderPolicy: false,
+  }));
   app.use(metricsMiddleware);
   app.setGlobalPrefix("v1");
+  const corsOrigins = process.env.API_CORS_ORIGIN
+    ? process.env.API_CORS_ORIGIN.split(",").map((origin) => origin.trim())
+    : process.env.NODE_ENV === "production"
+      ? false
+      : true;
+
   app.enableCors({
-    origin: process.env.API_CORS_ORIGIN?.split(",") ?? true,
+    origin: corsOrigins,
     credentials: true,
   });
 
@@ -40,6 +51,14 @@ async function bootstrap() {
       method: req.method,
       url: req.url,
     });
+    next();
+  });
+
+  app.use((req: any, res: any, next: any) => {
+    if (req.requestId) {
+      res.setHeader("X-Request-Id", req.requestId);
+    }
+    res.setHeader("Cache-Control", "no-store");
     next();
   });
 

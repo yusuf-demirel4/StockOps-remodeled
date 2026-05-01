@@ -18,6 +18,7 @@ export class SessionsController {
     const db = getDbClient();
     const sessions = await db.session.findMany({
       where: {
+        organizationId: ctx.organization.id,
         userId: ctx.user.id,
         expiresAt: { gt: new Date() },
       },
@@ -46,6 +47,7 @@ export class SessionsController {
     await db.session.deleteMany({
       where: {
         id: sessionId,
+        organizationId: ctx.organization.id,
         userId: ctx.user.id,
       },
     });

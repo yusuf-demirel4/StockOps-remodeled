@@ -12,6 +12,7 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { AppModule } from "./app.module";
+import { validateApiEnvironment } from "./config/env";
 
 const token = "stockops_demo_api_key";
 const authHeader = `Bearer ${token}`;
@@ -93,6 +94,51 @@ describe("StockOps API P0 flows", () => {
         minimumStock: 4,
       })
       .expect(409);
+  });
+
+  it("replays idempotent mutations and rejects key reuse with a different body", async () => {
+    const idempotencyKey = "phase7-product-create";
+    const payload = {
+      sku: "P7-IDEMPOTENT-001",
+      name: "Phase 7 Idempotent Product",
+      category: "Security",
+      minimumStock: 2,
+    };
+
+    const first = await request(app.getHttpServer())
+      .post("/v1/products")
+      .set("Authorization", authHeader)
+      .set("Idempotency-Key", idempotencyKey)
+      .send(payload)
+      .expect(201);
+
+    const second = await request(app.getHttpServer())
+      .post("/v1/products")
+      .set("Authorization", authHeader)
+      .set("Idempotency-Key", idempotencyKey)
+      .send(payload)
+      .expect(201);
+
+    expect(second.headers["idempotency-replayed"]).toBe("true");
+    expect(second.body).toEqual(first.body);
+
+    await request(app.getHttpServer())
+      .post("/v1/products")
+      .set("Authorization", authHeader)
+      .set("Idempotency-Key", idempotencyKey)
+      .send({ ...payload, sku: "P7-IDEMPOTENT-002" })
+      .expect(409);
+
+    const products = await request(app.getHttpServer())
+      .get("/v1/products")
+      .set("Authorization", authHeader)
+      .expect(200);
+
+    expect(
+      products.body.filter(
+        (product: { sku: string }) => product.sku === payload.sku,
+      ),
+    ).toHaveLength(1);
   });
 
   it("validates stock movement references and blocks negative stock", async () => {
@@ -439,5 +485,63 @@ describe("StockOps API P0 flows", () => {
       });
 
     expect(getMemoryQueueJobs()).toHaveLength(1);
+  });
+
+  it("requires provider delivery id and topic for production webhook replay protection", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    process.env.STOCKOPS_ALLOW_UNSIGNED_PROVIDER_WEBHOOKS = "true";
+
+    await request(app.getHttpServer())
+      .post("/v1/webhooks/shopify")
+      .send({ id: "gid://shopify/Product/missing-topic-and-id" })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post("/v1/webhooks/shopify")
+      .set("X-Shopify-Topic", "products/update")
+      .send({ id: "gid://shopify/Product/missing-id" })
+      .expect(400);
+
+    process.env.NODE_ENV = previousNodeEnv;
+    delete process.env.STOCKOPS_ALLOW_UNSIGNED_PROVIDER_WEBHOOKS;
+  });
+});
+
+describe("API production environment guardrails", () => {
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  it("rejects demo mode and default demo token in production", () => {
+    process.env.NODE_ENV = "production";
+    process.env.APP_DATA_SOURCE = "demo";
+    process.env.API_CORS_ORIGIN = "https://app.stockops.example";
+    process.env.SHOPIFY_WEBHOOK_SECRET = "shopify-secret";
+    process.env.WOOCOMMERCE_WEBHOOK_SECRET = "woo-secret";
+
+    expect(() => validateApiEnvironment()).toThrow(/APP_DATA_SOURCE=demo/);
+
+    process.env.STOCKOPS_ALLOW_DEMO_IN_PRODUCTION = "true";
+    expect(() => validateApiEnvironment()).toThrow(/default API demo token/);
+  });
+
+  it("requires explicit CORS and provider webhook secrets in production", () => {
+    process.env.NODE_ENV = "production";
+    process.env.APP_DATA_SOURCE = "database";
+    process.env.DATABASE_URL = "postgresql://stockops:stockops@localhost:5432/stockops";
+    process.env.API_DEMO_TOKEN = "not-the-default-token";
+    delete process.env.API_CORS_ORIGIN;
+
+    expect(() => validateApiEnvironment()).toThrow(/API_CORS_ORIGIN/);
+
+    process.env.API_CORS_ORIGIN = "https://app.stockops.example";
+    expect(() => validateApiEnvironment()).toThrow(/webhook secrets/);
+
+    process.env.SHOPIFY_WEBHOOK_SECRET = "shopify-secret";
+    process.env.WOOCOMMERCE_WEBHOOK_SECRET = "woo-secret";
+    expect(() => validateApiEnvironment()).not.toThrow();
   });
 });

@@ -167,6 +167,7 @@ model Organization {
   customers              Customer[]
   exchangeRates          ExchangeRate[]
   invoices               Invoice[]
+  idempotencyKeys        IdempotencyKey[]
   memberships            Membership[]
   accountingConnections  AccountingConnection[]
   notificationDeliveries NotificationDelivery[]
@@ -245,6 +246,7 @@ model User {
   apiTokens      ApiToken[]
   auditLogs      AuditLog[]
   backupCodes    BackupCode[]
+  idempotencyKeys IdempotencyKey[]
   oAuthAccounts  OAuthAccount[]
   memberships    Membership[]
   totpSecret     TotpSecret?
@@ -269,6 +271,26 @@ model ApiToken {
   @@index([organizationId])
   @@index([userId])
   @@index([revokedAt])
+}
+
+model IdempotencyKey {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  key            String
+  method         String
+  path           String
+  requestHash    String
+  statusCode     Int
+  responseBody   Json
+  createdAt      DateTime     @default(now())
+  expiresAt      DateTime
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+  @@index([organizationId, expiresAt])
+  @@index([userId])
 }
 
 model Session {

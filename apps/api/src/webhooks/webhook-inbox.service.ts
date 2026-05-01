@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { createInitialState } from "@stockops/core/demo-data";
 import type { WebhookReceivedJobName } from "@stockops/core/jobs";
 import { hashToken } from "@stockops/core/tokens";
@@ -14,6 +19,7 @@ import {
 } from "@stockops/core/webhooks";
 import { getPrisma } from "@stockops/db";
 import { publishJob } from "@stockops/queue";
+import { allowUnsignedProviderWebhooks } from "../config/env";
 
 type HeaderBag = Record<string, string | string[] | undefined>;
 type PublicWebhookSource = "shopify" | "woocommerce";
@@ -21,6 +27,7 @@ type PublicWebhookSource = "shopify" | "woocommerce";
 const globalForWebhookDemo = globalThis as typeof globalThis & {
   stockOpsApiWebhookState?: AppState;
 };
+const WEBHOOK_REPLAY_WINDOW_MS = 1000 * 60 * 5;
 
 function demoState() {
   globalForWebhookDemo.stockOpsApiWebhookState ??= createInitialState();
@@ -101,6 +108,7 @@ export class WebhookInboxService {
 
     const eventTopic = topic ?? "unknown";
     const externalId = externalIdFor(normalizedSource, headers, body);
+    assertReplaySafe(normalizedSource, headers, eventTopic, externalId, verification.configured);
     const dedupeKey = dedupeKeyFor(normalizedSource, eventTopic, body, externalId);
 
     if (process.env.APP_DATA_SOURCE === "database") {
@@ -292,4 +300,51 @@ function providerSecret(source: WebhookSource) {
   return source === "SHOPIFY"
     ? process.env.SHOPIFY_WEBHOOK_SECRET
     : process.env.WOOCOMMERCE_WEBHOOK_SECRET;
+}
+
+function assertReplaySafe(
+  source: WebhookSource,
+  headers: Record<string, string>,
+  topic: string,
+  externalId: string | undefined,
+  providerSignatureConfigured: boolean,
+) {
+  if (process.env.NODE_ENV !== "production") {
+    return;
+  }
+
+  if (!providerSignatureConfigured && !allowUnsignedProviderWebhooks()) {
+    throw new ForbiddenException(
+      `${source.toLowerCase()} webhook signatures are required in production.`,
+    );
+  }
+
+  if (!externalId) {
+    throw new BadRequestException(
+      `${source.toLowerCase()} webhooks must include a provider delivery id in production.`,
+    );
+  }
+
+  if (topic === "unknown") {
+    throw new BadRequestException(
+      `${source.toLowerCase()} webhooks must include a provider topic in production.`,
+    );
+  }
+
+  const timestamp =
+    webhookHeader(headers, "x-shopify-triggered-at") ??
+    webhookHeader(headers, "x-stockops-webhook-timestamp");
+
+  if (!timestamp) {
+    return;
+  }
+
+  const observedAt = Date.parse(timestamp);
+  if (!Number.isFinite(observedAt)) {
+    throw new BadRequestException("Webhook timestamp is invalid.");
+  }
+
+  if (Math.abs(Date.now() - observedAt) > WEBHOOK_REPLAY_WINDOW_MS) {
+    throw new ForbiddenException("Webhook timestamp is outside the replay window.");
+  }
 }

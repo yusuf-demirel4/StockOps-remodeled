@@ -1,11 +1,12 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
 
 import { ApiAuthGuard } from "./auth/api-auth.guard";
 import { ApiAuthService } from "./auth/api-auth.service";
 import { AuthController } from "./auth/auth.controller";
 import { PermissionsGuard } from "./auth/permissions.guard";
+import { getRateLimitConfig } from "./config/env";
 import { StockOpsApiService } from "./domain/stockops-api.service";
 import { CustomersController } from "./customers/customers.controller";
 import { ExportsController } from "./exports/exports.controller";
@@ -27,12 +28,13 @@ import { SuppliersController } from "./suppliers/suppliers.controller";
 import { WebhookInboxService } from "./webhooks/webhook-inbox.service";
 import { WebhookSecretGuard } from "./webhooks/webhook-secret.guard";
 import { WebhooksController } from "./webhooks/webhooks.controller";
+import { IdempotencyInterceptor } from "./security/idempotency.interceptor";
 
 @Module({
   imports: [
     ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 100,
+      ttl: getRateLimitConfig().ttl,
+      limit: getRateLimitConfig().limit,
     }]),
   ],
   controllers: [
@@ -58,6 +60,10 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: IdempotencyInterceptor,
     },
     ApiAuthGuard,
     ApiAuthService,
