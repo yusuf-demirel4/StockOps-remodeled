@@ -6,6 +6,30 @@ import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/ui";
 import { notFound } from "next/navigation";
 import { getDemoCreditNotes } from "@/lib/demo-store";
+import type { CreditNoteStatus } from "@stockops/core/types";
+
+type CreditNoteDetailLine = {
+  id?: string | null;
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  product?: { name: string } | null;
+};
+
+type CreditNoteDetail = {
+  id: string;
+  customerId: string;
+  salesReturnId?: string | null;
+  code: string;
+  status: CreditNoteStatus;
+  totalAmount: number;
+  appliedAmount: number;
+  notes?: string | null;
+  createdAt: string;
+  customer?: { name: string } | null;
+  lines: CreditNoteDetailLine[];
+};
 
 export const metadata = {
   title: "Kredi Notu Detayı | StockOps",
@@ -20,11 +44,10 @@ export default async function CreditNoteDetailPage({
   const context = await requireAuth();
   const isDbMode = getDataSourceMode() === "database";
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let note: any = null;
+  let note: CreditNoteDetail | null = null;
 
   if (isDbMode) {
-    note = await (getPrisma() as any).creditNote.findFirst({
+    const dbNote = await getPrisma().creditNote.findFirst({
       where: {
         id: id,
         organizationId: context.organization.id,
@@ -34,6 +57,28 @@ export default async function CreditNoteDetailPage({
         lines: { include: { product: true } },
       },
     });
+    note = dbNote
+      ? {
+          id: dbNote.id,
+          customerId: dbNote.customerId,
+          salesReturnId: dbNote.salesReturnId,
+          code: dbNote.code,
+          status: dbNote.status,
+          totalAmount: Number(dbNote.totalAmount),
+          appliedAmount: Number(dbNote.appliedAmount),
+          notes: dbNote.notes,
+          createdAt: dbNote.createdAt.toISOString(),
+          customer: dbNote.customer ? { name: dbNote.customer.name } : null,
+          lines: dbNote.lines.map((line) => ({
+            id: line.id,
+            productId: line.productId,
+            quantity: line.quantity,
+            unitPrice: Number(line.unitPrice),
+            lineTotal: Number(line.lineTotal),
+            product: line.product ? { name: line.product.name } : null,
+          })),
+        }
+      : null;
   } else {
     const demoNotes = getDemoCreditNotes(context);
     note = demoNotes.find((n) => n.id === id) || null;
@@ -61,8 +106,7 @@ export default async function CreditNoteDetailPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {note.lines.map((line: any) => (
+                  {note.lines.map((line) => (
                     <tr key={line.id || line.productId} className="border-b last:border-0">
                       <td className="px-4 py-3 font-medium">
                         {line.product?.name || line.productId}
@@ -107,8 +151,7 @@ export default async function CreditNoteDetailPage({
                             : "bg-red-100 text-red-800"
                     }`}
                   >
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    {creditNoteStatusLabel(note.status as any)}
+                    {creditNoteStatusLabel(note.status)}
                   </span>
                 </dd>
               </div>

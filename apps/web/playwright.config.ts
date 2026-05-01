@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const port = process.env.PORT ?? "3000";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${port}`;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false, // Auth state paylaşımı için sequential daha güvenli
@@ -11,7 +14,7 @@ export default defineConfig({
     : [["html", { open: "never" }], ["list"]],
 
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
+    baseURL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "on-first-retry",
@@ -33,22 +36,22 @@ export default defineConfig({
       ? {
           // CI'da build edilmiş uygulamayı başlat (demo mode)
           command: "npm run start",
-          url: "http://localhost:3000",
+          url: baseURL,
           timeout: 60_000,
           env: {
             APP_DATA_SOURCE: "demo",
-            PORT: "3000",
+            PORT: port,
           },
         }
       : {
           command: "npm run build && npm run start",
-          url: "http://localhost:3000",
-          reuseExistingServer: false,
+          url: baseURL,
+          reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
           timeout: 180_000,
           env: {
             APP_DATA_SOURCE: "demo",
             NEXT_TELEMETRY_DISABLED: "1",
-            PORT: "3000",
+            PORT: port,
           },
         },
 });

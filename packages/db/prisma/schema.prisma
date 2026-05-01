@@ -395,8 +395,8 @@ model WarehouseBin {
   stockMovements  StockMovement[]
   pickListItems   PickListItem[]
   stocktakeItems  StocktakeItem[]
-  organization    Organization?    @relation(fields: [organizationId], references: [id])
-  organizationId  String?
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId  String
 
   @@unique([warehouseId, code])
   @@index([warehouseId])

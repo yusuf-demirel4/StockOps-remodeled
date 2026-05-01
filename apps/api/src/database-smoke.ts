@@ -16,6 +16,23 @@ type OrderListItem = {
   code: string;
 };
 
+function readListBody<T>(body: unknown, name: string): T[] {
+  if (Array.isArray(body)) {
+    return body as T[];
+  }
+
+  if (
+    body &&
+    typeof body === "object" &&
+    "data" in body &&
+    Array.isArray((body as { data?: unknown }).data)
+  ) {
+    return (body as { data: T[] }).data;
+  }
+
+  throw new Error(`Expected ${name} response to be an array or paginated data object.`);
+}
+
 function assertSmoke(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(message);
@@ -89,10 +106,12 @@ async function main() {
       .get("/v1/sales-orders")
       .set("Authorization", authorization)
       .expect(200);
+    const salesOrderRows = readListBody<OrderListItem>(
+      salesOrders.body,
+      "sales orders",
+    );
     assertSmoke(
-      (salesOrders.body as OrderListItem[]).some(
-        (order) => order.code === "SO-1001",
-      ),
+      salesOrderRows.some((order) => order.code === "SO-1001"),
       "Expected seeded sales order SO-1001.",
     );
 
@@ -100,10 +119,12 @@ async function main() {
       .get("/v1/purchase-orders")
       .set("Authorization", authorization)
       .expect(200);
+    const purchaseOrderRows = readListBody<OrderListItem>(
+      purchaseOrders.body,
+      "purchase orders",
+    );
     assertSmoke(
-      (purchaseOrders.body as OrderListItem[]).some(
-        (order) => order.code === "PO-2001",
-      ),
+      purchaseOrderRows.some((order) => order.code === "PO-2001"),
       "Expected seeded purchase order PO-2001.",
     );
 
