@@ -1,4 +1,5 @@
 import type { JobName, QueueJob } from "@stockops/core/jobs";
+import { handleAccountingSyncDispatch } from "./accounting-sync-dispatcher";
 import {
   handleLowStockNotificationDispatch,
   handleOrderStatusNotificationDispatch,
@@ -43,9 +44,10 @@ export async function handleJob(job: QueueJob) {
       );
     case "xero.invoice.sync":
     case "xero.payment.sync":
-    case "xero.product.sync":
     case "quickbooks.invoice.sync":
     case "quickbooks.payment.sync":
+      return handleAccountingSyncDispatch(job as Parameters<typeof handleAccountingSyncDispatch>[0]);
+    case "xero.product.sync":
     case "quickbooks.product.sync":
       return {
         status: "skipped",

@@ -14,10 +14,18 @@ export default async function WooCommerceIntegrationPage() {
   const wooEvents = snapshot.webhookEvents.filter(
     (e) => e.source === "WOOCOMMERCE",
   );
+  const wooSyncLogs = snapshot.integrationSyncLogs.filter(
+    (log) => log.source === "WOOCOMMERCE",
+  );
   const processedCount = wooEvents.filter(
     (e) => e.status === "PROCESSED",
   ).length;
-  const failedCount = wooEvents.filter((e) => e.status === "FAILED").length;
+  const failedCount = wooEvents.filter(
+    (e) => e.status === "FAILED" || e.status === "DEAD_LETTER",
+  ).length;
+  const syncFailureCount = wooSyncLogs.filter(
+    (log) => log.status === "FAILED" || log.status === "DEAD_LETTER",
+  ).length;
 
   return (
     <AppShell
@@ -138,6 +146,66 @@ export default async function WooCommerceIntegrationPage() {
               </div>
             </Panel>
 
+            <Panel title="Stok Senkronizasyon Loglari">
+              <div className="mb-3 flex items-center justify-between text-sm">
+                <span className="text-[var(--text-secondary)]">
+                  {wooSyncLogs.length} kayit
+                </span>
+                <StatusBadge tone={syncFailureCount > 0 ? "danger" : "success"}>
+                  {syncFailureCount > 0 ? `${syncFailureCount} sorun` : "Saglikli"}
+                </StatusBadge>
+              </div>
+              {wooSyncLogs.length === 0 ? (
+                <p className="py-4 text-center text-sm text-[var(--text-secondary)]">
+                  Henuz WooCommerce stok senkronizasyon kaydi yok.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                      <tr className="border-b border-[var(--border-subtle)]">
+                        <th className="py-2 pr-3">Varlik</th>
+                        <th className="py-2 pr-3">Durum</th>
+                        <th className="py-2 pr-3">Deneme</th>
+                        <th className="py-2">Siraya Alindi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {wooSyncLogs.map((log) => (
+                        <tr
+                          className="border-b border-[var(--border-table)] last:border-0"
+                          key={log.id}
+                        >
+                          <td className="py-2 pr-3 font-mono text-xs">
+                            {log.entityType}
+                          </td>
+                          <td className="py-2 pr-3">
+                            <StatusBadge
+                              tone={
+                                log.status === "SUCCESS"
+                                  ? "success"
+                                  : log.status === "FAILED" || log.status === "DEAD_LETTER"
+                                    ? "danger"
+                                    : "warning"
+                              }
+                            >
+                              {log.status}
+                            </StatusBadge>
+                          </td>
+                          <td className="py-2 pr-3">
+                            {log.attempts}/{log.maxAttempts}
+                          </td>
+                          <td className="py-2 text-xs text-[var(--text-secondary)]">
+                            {new Date(log.queuedAt).toLocaleString("tr-TR")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+
             <Panel title="Son Webhook Olaylari">
               {wooEvents.length === 0 ? (
                 <p className="py-4 text-center text-sm text-[var(--text-secondary)]">
@@ -168,7 +236,7 @@ export default async function WooCommerceIntegrationPage() {
                               tone={
                                 event.status === "PROCESSED"
                                   ? "success"
-                                  : event.status === "FAILED"
+                                  : event.status === "FAILED" || event.status === "DEAD_LETTER"
                                     ? "danger"
                                     : "warning"
                               }

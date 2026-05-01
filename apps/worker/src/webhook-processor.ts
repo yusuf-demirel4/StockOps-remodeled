@@ -6,6 +6,15 @@ import { extractExternalOrder } from "@stockops/core/webhooks";
 import { getPrisma } from "@stockops/db";
 import { publishJob } from "@stockops/queue";
 
+const MAX_WEBHOOK_ATTEMPTS = 5;
+const RETRY_DELAY_MS = 1000 * 60 * 5;
+
+type DatabaseWebhookEvent = {
+  id: string;
+  organizationId: string;
+  payload: unknown;
+};
+
 export async function handleWebhookReceived(
   job: QueueJob<WebhookReceivedJobName>,
 ) {
@@ -40,14 +49,49 @@ async function processDatabaseWebhook(job: QueueJob<WebhookReceivedJobName>) {
     };
   }
 
+  const nextAttempt = event.attempts + 1;
   await prisma.webhookEvent.update({
     where: { id: event.id },
     data: {
       attempts: { increment: 1 },
+      error: null,
+      nextAttemptAt: null,
       status: "PROCESSING",
     },
   });
 
+  try {
+    return await importExternalOrder(job, event, nextAttempt);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown webhook processing error.";
+    const deadLetter = nextAttempt >= MAX_WEBHOOK_ATTEMPTS;
+    await prisma.webhookEvent.update({
+      where: { id: event.id },
+      data: {
+        error: message,
+        nextAttemptAt: deadLetter
+          ? null
+          : new Date(Date.now() + RETRY_DELAY_MS),
+        processedAt: new Date(),
+        status: deadLetter ? "DEAD_LETTER" : "FAILED",
+      },
+    });
+
+    return {
+      status: deadLetter ? "webhook-event-dead-lettered" : "webhook-event-failed",
+      jobId: job.id,
+      reason: message,
+      webhookEventId: event.id,
+    };
+  }
+}
+
+async function importExternalOrder(
+  job: QueueJob<WebhookReceivedJobName>,
+  event: DatabaseWebhookEvent,
+  attempt: number,
+) {
+  const prisma = getPrisma();
   const order = extractExternalOrder(
     job.payload.source,
     job.payload.topic,
@@ -93,13 +137,20 @@ async function processDatabaseWebhook(job: QueueJob<WebhookReceivedJobName>) {
       where: { id: event.id },
       data: {
         error: `No matching SKU for external order ${order.externalId}.`,
+        nextAttemptAt:
+          attempt >= MAX_WEBHOOK_ATTEMPTS
+            ? null
+            : new Date(Date.now() + RETRY_DELAY_MS),
         processedAt: new Date(),
-        status: "FAILED",
+        status: attempt >= MAX_WEBHOOK_ATTEMPTS ? "DEAD_LETTER" : "FAILED",
       },
     });
 
     return {
-      status: "webhook-event-failed",
+      status:
+        attempt >= MAX_WEBHOOK_ATTEMPTS
+          ? "webhook-event-dead-lettered"
+          : "webhook-event-failed",
       jobId: job.id,
       reason: "no-matching-sku",
       webhookEventId: event.id,

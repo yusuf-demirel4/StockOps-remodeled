@@ -79,6 +79,7 @@ export type WebhookEventStatus =
   | "PROCESSING"
   | "PROCESSED"
   | "FAILED"
+  | "DEAD_LETTER"
   | "IGNORED";
 export type NotificationChannel = "SMS" | "WHATSAPP";
 export type NotificationDeliveryStatus =
@@ -423,8 +424,29 @@ export type WebhookEvent = {
   headers?: Record<string, string>;
   error?: string;
   attempts: number;
+  nextAttemptAt?: string;
   receivedAt: string;
   processedAt?: string;
+};
+
+export type IntegrationSyncLog = {
+  id: string;
+  organizationId: string;
+  source: WebhookSource;
+  direction: "PUSH" | "PULL";
+  entityType: string;
+  entityId?: string;
+  externalId?: string;
+  status: "QUEUED" | "RUNNING" | "SUCCESS" | "FAILED" | "CONFLICT" | "DEAD_LETTER";
+  attempts: number;
+  maxAttempts: number;
+  error?: string;
+  metadata?: unknown;
+  queuedAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  nextAttemptAt?: string;
+  replayOfId?: string;
 };
 
 export type ExtensionWebhookSubscription = {
@@ -622,6 +644,7 @@ export type AppState = {
   sessions: Session[];
   apiTokens?: ApiToken[];
   webhookEvents?: WebhookEvent[];
+  integrationSyncLogs?: IntegrationSyncLog[];
   webhookSubscriptions?: ExtensionWebhookSubscription[];
   customFields?: CustomFieldValue[];
   exchangeRates?: ExchangeRate[];
@@ -656,6 +679,7 @@ export type AppSnapshot = {
   openPurchaseOrders: PurchaseOrder[];
   auditLogs: AuditLog[];
   webhookEvents: WebhookEvent[];
+  integrationSyncLogs: IntegrationSyncLog[];
   webhookSubscriptions: ExtensionWebhookSubscription[];
   customFields: CustomFieldValue[];
   exchangeRates: ExchangeRate[];

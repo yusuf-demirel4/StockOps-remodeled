@@ -198,6 +198,7 @@ export function createInitialState(): AppState {
     ],
     sessions: [],
     webhookEvents: [],
+    integrationSyncLogs: [],
     webhookSubscriptions: [],
     customFields: [],
     exchangeRates: [],

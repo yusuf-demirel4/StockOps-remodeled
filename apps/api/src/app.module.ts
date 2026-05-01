@@ -14,6 +14,7 @@ import { ExtensionsController } from "./extensions/extensions.controller";
 import { ForecastingController } from "./forecasting/forecasting.controller";
 import { ForecastingService } from "./forecasting/forecasting.service";
 import { HealthController } from "./health/health.controller";
+import { AccountingController } from "./integrations/accounting.controller";
 import { InventoryController } from "./inventory/inventory.controller";
 import { CreditNotesController } from "./invoices/credit-notes.controller";
 import { InvoicesController } from "./invoices/invoices.controller";
@@ -47,6 +48,7 @@ import { IdempotencyInterceptor } from "./security/idempotency.interceptor";
     ExtensionsController,
     ForecastingController,
     HealthController,
+    AccountingController,
     InventoryController,
     CreditNotesController,
     InvoicesController,

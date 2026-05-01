@@ -123,6 +123,7 @@ enum WebhookEventStatus {
   PROCESSING
   PROCESSED
   FAILED
+  DEAD_LETTER
   IGNORED
 }
 
@@ -163,9 +164,12 @@ enum SyncDirection {
 }
 
 enum SyncStatus {
+  QUEUED
+  RUNNING
   SUCCESS
   FAILED
   CONFLICT
+  DEAD_LETTER
 }
 
 enum ExtensionWebhookStatus {
@@ -200,6 +204,7 @@ model Organization {
   memberships            Membership[]
   stockBalances          StockBalance[]
   stockReconciliations   StockReconciliation[]
+  integrationSyncLogs    IntegrationSyncLog[]
   accountingConnections  AccountingConnection[]
   notificationDeliveries NotificationDelivery[]
   payments               Payment[]
@@ -649,12 +654,37 @@ model WebhookEvent {
   headers        Json?
   error          String?
   attempts       Int                @default(0)
+  nextAttemptAt  DateTime?
   receivedAt     DateTime           @default(now())
   processedAt    DateTime?
   organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, status, receivedAt])
   @@index([source, topic])
+}
+
+model IntegrationSyncLog {
+  id             String        @id @default(cuid())
+  organizationId String
+  source         WebhookSource
+  direction      SyncDirection
+  entityType     String
+  entityId       String?
+  externalId     String?
+  status         SyncStatus    @default(QUEUED)
+  attempts       Int           @default(0)
+  maxAttempts    Int           @default(5)
+  error          String?
+  metadata       Json          @default("{}")
+  queuedAt       DateTime      @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  nextAttemptAt  DateTime?
+  replayOfId     String?
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, source, status, queuedAt])
+  @@index([entityType, entityId])
 }
 
 model NotificationDelivery {
@@ -847,7 +877,15 @@ model AccountingSyncLog {
   entityId     String
   externalId   String?
   status       SyncStatus
+  attempts     Int                  @default(0)
+  maxAttempts  Int                  @default(5)
   error        String?
+  metadata     Json                 @default("{}")
+  queuedAt     DateTime             @default(now())
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  nextAttemptAt DateTime?
+  replayOfId   String?
   resolvedAt   DateTime?
   createdAt    DateTime             @default(now())
   connection   AccountingConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)

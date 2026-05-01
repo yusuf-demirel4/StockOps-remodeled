@@ -51,6 +51,7 @@ import type {
   CustomFieldValue,
   ExtensionWebhookSubscription,
   Invoice,
+  IntegrationSyncLog,
   InvoiceLine,
   ManufacturingOrder,
   Member,
@@ -181,6 +182,9 @@ export function getDemoSnapshot(context: AuthContext): AppSnapshot {
     webhookEvents: (appState.webhookEvents ?? [])
       .filter((event) => event.organizationId === organization.id)
       .slice(0, 12) as WebhookEvent[],
+    integrationSyncLogs: (appState.integrationSyncLogs ?? [])
+      .filter((log) => log.organizationId === organization.id)
+      .slice(0, 25) as IntegrationSyncLog[],
     webhookSubscriptions: (appState.webhookSubscriptions ?? []).filter(
       (subscription) => subscription.organizationId === organization.id,
     ),

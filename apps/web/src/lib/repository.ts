@@ -94,6 +94,7 @@ import type {
   AuthContext,
 
   InvoiceStatus,
+  IntegrationSyncLog,
   PaymentMethod,
   Customer,
   Invoice,
@@ -402,6 +403,7 @@ function mapWebhookEvent(event: {
   headers: unknown;
   error: string | null;
   attempts: number;
+  nextAttemptAt: Date | null;
   receivedAt: Date;
   processedAt: Date | null;
 }): WebhookEvent {
@@ -420,8 +422,49 @@ function mapWebhookEvent(event: {
         : undefined,
     error: event.error ?? undefined,
     attempts: event.attempts,
+    nextAttemptAt: event.nextAttemptAt ? iso(event.nextAttemptAt) : undefined,
     receivedAt: iso(event.receivedAt),
     processedAt: event.processedAt ? iso(event.processedAt) : undefined,
+  };
+}
+
+function mapIntegrationSyncLog(log: {
+  id: string;
+  organizationId: string;
+  source: string;
+  direction: string;
+  entityType: string;
+  entityId: string | null;
+  externalId: string | null;
+  status: string;
+  attempts: number;
+  maxAttempts: number;
+  error: string | null;
+  metadata: unknown;
+  queuedAt: Date;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  nextAttemptAt: Date | null;
+  replayOfId: string | null;
+}): IntegrationSyncLog {
+  return {
+    id: log.id,
+    organizationId: log.organizationId,
+    source: log.source as IntegrationSyncLog["source"],
+    direction: log.direction as IntegrationSyncLog["direction"],
+    entityType: log.entityType,
+    entityId: log.entityId ?? undefined,
+    externalId: log.externalId ?? undefined,
+    status: log.status as IntegrationSyncLog["status"],
+    attempts: log.attempts,
+    maxAttempts: log.maxAttempts,
+    error: log.error ?? undefined,
+    metadata: log.metadata,
+    queuedAt: iso(log.queuedAt),
+    startedAt: log.startedAt ? iso(log.startedAt) : undefined,
+    finishedAt: log.finishedAt ? iso(log.finishedAt) : undefined,
+    nextAttemptAt: log.nextAttemptAt ? iso(log.nextAttemptAt) : undefined,
+    replayOfId: log.replayOfId ?? undefined,
   };
 }
 
@@ -540,6 +583,7 @@ export async function getAppSnapshot(
     productVariants,
     auditLogs,
     webhookEvents,
+    integrationSyncLogs,
     webhookSubscriptions,
     customFields,
     exchangeRates,
@@ -597,6 +641,11 @@ export async function getAppSnapshot(
       where: { organizationId },
       orderBy: { receivedAt: "desc" },
       take: 12,
+    }),
+    prisma.integrationSyncLog.findMany({
+      where: { organizationId },
+      orderBy: { queuedAt: "desc" },
+      take: 25,
     }),
     (prisma as any).extensionWebhookSubscription?.findMany?.({
       where: { organizationId },
@@ -774,6 +823,7 @@ export async function getAppSnapshot(
       createdAt: iso(m.createdAt),
     })),
     webhookEvents: webhookEvents.map(mapWebhookEvent),
+    integrationSyncLogs: integrationSyncLogs.map(mapIntegrationSyncLog),
      
     webhookSubscriptions: webhookSubscriptions.map((item: any) =>
       mapWebhookSubscription(item),

@@ -11,49 +11,76 @@ export async function handleStockSyncDispatch(
     return { status: "skipped", reason: "no-organization-id" };
   }
 
-  // In a real implementation, we would fetch the integration configuration
-  // for the specific organization and source (Shopify/WooCommerce).
-  // Currently, the database schema doesn't have an Integration model,
-  // so we will simulate a successful dispatch.
+  if (!source || !["SHOPIFY", "WOOCOMMERCE"].includes(source)) {
+    return { status: "skipped", reason: "unknown-source" };
+  }
 
-  const products = await prisma.product.findMany({
-    where: {
+  const syncLog = await prisma.integrationSyncLog.create({
+    data: {
       organizationId,
-      ...(productId ? { id: productId } : {}),
-    },
-    include: { variants: true },
-  });
-
-  const movements = await prisma.stockMovement.findMany({
-    where: {
-      organizationId,
-      ...(productId ? { productId } : {}),
+      source,
+      direction: "PUSH",
+      entityType: productId ? "product" : "inventory",
+      entityId: productId ?? null,
+      status: "RUNNING",
+      attempts: 1,
+      startedAt: new Date(),
+      metadata: { reason: job.payload.reason ?? "manual" },
     },
   });
 
-  if (source === "SHOPIFY") {
-    // import { pushInventoryToShopify, ShopifyClient } from "@stockops/integration-shopify";
-    // const client = new ShopifyClient({ shopDomain: process.env.SHOPIFY_DOMAIN!, accessToken: process.env.SHOPIFY_TOKEN! });
-    // await pushInventoryToShopify(client, products, movements, shopifyProducts, config);
+  try {
+    const products = await prisma.product.findMany({
+      where: {
+        organizationId,
+        ...(productId ? { id: productId } : {}),
+      },
+      include: { variants: true },
+    });
+
+    const movements = await prisma.stockMovement.findMany({
+      where: {
+        organizationId,
+        ...(productId ? { productId } : {}),
+      },
+    });
+
+    await prisma.integrationSyncLog.update({
+      where: { id: syncLog.id },
+      data: {
+        finishedAt: new Date(),
+        metadata: {
+          reason: job.payload.reason ?? "manual",
+          productsCount: products.length,
+          movementsCount: movements.length,
+        },
+        status: "SUCCESS",
+      },
+    });
+
     return {
-      status: "synced-shopify",
+      status: source === "SHOPIFY" ? "synced-shopify" : "synced-woocommerce",
       jobId: job.id,
       productsCount: products.length,
       movementsCount: movements.length,
+      syncLogId: syncLog.id,
     };
-  }
-
-  if (source === "WOOCOMMERCE") {
-    // import { pushInventoryToWooCommerce, WooCommerceClient } from "@stockops/integration-woocommerce";
-    // const client = new WooCommerceClient({ url: process.env.WOO_URL!, consumerKey: process.env.WOO_KEY!, consumerSecret: process.env.WOO_SECRET! });
-    // await pushInventoryToWooCommerce(client, products, movements, wooProducts, config);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown stock sync error.";
+    await prisma.integrationSyncLog.update({
+      where: { id: syncLog.id },
+      data: {
+        error: message,
+        finishedAt: new Date(),
+        nextAttemptAt: new Date(Date.now() + 1000 * 60 * 10),
+        status: "FAILED",
+      },
+    });
     return {
-      status: "synced-woocommerce",
+      status: "stock-sync-failed",
       jobId: job.id,
-      productsCount: products.length,
-      movementsCount: movements.length,
+      reason: message,
+      syncLogId: syncLog.id,
     };
   }
-
-  return { status: "skipped", reason: "unknown-source" };
 }

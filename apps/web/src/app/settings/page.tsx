@@ -43,6 +43,7 @@ const webhookStatusTone: Record<
   "neutral" | "success" | "warning" | "danger"
 > = {
   FAILED: "danger",
+  DEAD_LETTER: "danger",
   IGNORED: "neutral",
   PENDING: "warning",
   PROCESSED: "success",

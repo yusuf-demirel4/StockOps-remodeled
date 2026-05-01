@@ -52,6 +52,7 @@ export type AccountingSyncPayload = {
   connectionId: string;
   organizationId: string;
   direction?: "push" | "pull";
+  syncLogId?: string;
 };
 
 export type JobPayloadByName = {
