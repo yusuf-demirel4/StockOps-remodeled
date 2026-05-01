@@ -73,6 +73,34 @@ export function buildStockRows(
     );
 }
 
+export function buildStockRowsFromBalances(
+  products: Product[],
+  warehouses: Warehouse[],
+  balances: { productId: string; warehouseId: string; onHand: number; reserved?: number; available?: number }[],
+): StockRow[] {
+  const balanceMap = new Map<string, typeof balances[0]>();
+  for (const b of balances) {
+    balanceMap.set(`${b.productId}:${b.warehouseId}`, b);
+  }
+
+  return products
+    .filter((product) => product.isActive)
+    .flatMap((product) =>
+      warehouses.map((warehouse) => {
+        const bal = balanceMap.get(`${product.id}:${warehouse.id}`);
+        const onHand = bal ? Number(bal.onHand) : 0;
+
+        return {
+          product,
+          warehouse,
+          onHand,
+          minimumStock: product.minimumStock,
+          isCritical: onHand <= product.minimumStock,
+        };
+      }),
+    );
+}
+
 export function assertEnoughStock(
   movements: StockMovement[],
   warehouseId: string,

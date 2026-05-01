@@ -43,7 +43,7 @@ import type {
   Supplier,
   Warehouse,
 } from "@stockops/core/types";
-import { getPrisma } from "@stockops/db";
+import { adjustBalance, adjustReservation, getPrisma } from "@stockops/db";
 import type { ZodType } from "zod";
 
 type ProductListItem = Product & {
@@ -168,20 +168,58 @@ function mapStockMovement(movement: {
   };
 }
 
+function mapBalanceToStockRow(row: any) {
+  return {
+    product: {
+      id: row.p_id,
+      organizationId: row.p_orgId,
+      sku: row.sku,
+      name: row.p_name,
+      barcode: row.barcode ?? undefined,
+      category: row.category,
+      description: row.description ?? undefined,
+      minimumStock: row.minimumStock,
+      isActive: row.isActive,
+      unitPrice: Number(row.unitPrice || 0),
+    },
+    warehouse: {
+      id: row.w_id,
+      organizationId: row.w_orgId,
+      code: row.w_code,
+      name: row.w_name,
+      isDefault: row.isDefault,
+    },
+    onHand: Number(row.onHand),
+    reserved: Number(row.reserved ?? 0),
+    available: Number(row.available ?? 0),
+    minimumStock: row.minimumStock,
+    isCritical: Number(row.onHand) <= row.minimumStock,
+  };
+}
+
 @Injectable()
 export class StockOpsApiService {
   async listProducts(context: AuthContext): Promise<ProductListItem[]> {
     if (dbMode()) {
-      const [products, rows] = await Promise.all([
+      const prisma = getPrisma();
+      const [products, balances] = await Promise.all([
         this.listDatabaseProducts(context),
-        this.listStockRows(context),
+        prisma.$queryRawUnsafe<{ productId: string; total: number }[]>(
+          `SELECT "productId", SUM("onHand")::int as total
+           FROM "StockBalance"
+           WHERE "organizationId" = $1
+           GROUP BY "productId"`,
+          context.organization.id,
+        ),
       ]);
+
+      const balanceMap = new Map(
+        balances.map((b) => [b.productId, Number(b.total)]),
+      );
 
       return products.map((product) => ({
         ...product,
-        totalOnHand: rows
-          .filter((row) => row.product.id === product.id)
-          .reduce((total, row) => total + row.onHand, 0),
+        totalOnHand: balanceMap.get(product.id) ?? 0,
       }));
     }
 
@@ -663,38 +701,102 @@ export class StockOpsApiService {
     return warehouse;
   }
 
-  async listStockRows(context: AuthContext) {
+  async listStockRows(
+    context: AuthContext,
+    filters?: { cursor?: string; limit?: number },
+  ) {
     if (dbMode()) {
-      const [products, warehouses, stockMovements] = await Promise.all([
-        this.listDatabaseProducts(context),
-        this.listWarehouses(context),
-        this.listStockMovements(context),
-      ]);
-
-      return buildStockRows(products, warehouses, stockMovements);
+      return this.listDatabaseStockRows(context, filters);
     }
 
-    return this.listDemoStockRows(context);
+    return {
+      data: this.listDemoStockRows(context),
+      pagination: { total: 0, limit: 50, cursor: null, hasMore: false },
+    };
   }
 
   async listCriticalStockRows(context: AuthContext) {
-    return (await this.listStockRows(context)).filter((row) => row.isCritical);
-  }
-
-  async listStockMovements(context: AuthContext): Promise<StockMovement[]> {
     if (dbMode()) {
-      const movements = await getPrisma().stockMovement.findMany({
-        where: { organizationId: context.organization.id },
-        orderBy: { createdAt: "desc" },
-        take: 200,
-      });
+      const prisma = getPrisma();
+      const rows = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT sb."id", sb."productId", sb."warehouseId", sb."onHand", sb."reserved", sb."available",
+                p."id" as p_id, p."organizationId" as p_orgId, p."sku", p."name" as p_name,
+                p."barcode", p."category", p."description", p."minimumStock", p."isActive",
+                p."unitPrice",
+                w."id" as w_id, w."organizationId" as w_orgId, w."code" as w_code,
+                w."name" as w_name, w."isDefault"
+         FROM "StockBalance" sb
+         JOIN "Product" p ON p."id" = sb."productId"
+         JOIN "Warehouse" w ON w."id" = sb."warehouseId"
+         WHERE sb."organizationId" = $1
+           AND p."isActive" = true
+           AND sb."onHand" <= p."minimumStock"
+         ORDER BY sb."onHand" ASC`,
+        context.organization.id,
+      );
 
-      return movements.map(mapStockMovement);
+      return {
+        data: rows.map(mapBalanceToStockRow),
+        pagination: { total: rows.length, limit: rows.length, cursor: null, hasMore: false },
+      };
     }
 
-    return demoState().stockMovements
-      .filter((movement) => movement.organizationId === context.organization.id)
+    const allRows = this.listDemoStockRows(context);
+    return {
+      data: allRows.filter((row) => row.isCritical),
+      pagination: { total: 0, limit: 50, cursor: null, hasMore: false },
+    };
+  }
+
+  async listStockMovements(
+    context: AuthContext,
+    filters?: { cursor?: string; limit?: number },
+  ) {
+    if (dbMode()) {
+      const prisma = getPrisma();
+      const limit = Math.min(Math.max(filters?.limit ?? 50, 1), 200);
+      const where: Record<string, unknown> = {
+        organizationId: context.organization.id,
+      };
+
+      const cursorArgs = filters?.cursor
+        ? { skip: 1, cursor: { id: filters.cursor } }
+        : {};
+
+      const [total, movements] = await Promise.all([
+        prisma.stockMovement.count({ where }),
+        prisma.stockMovement.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          ...cursorArgs,
+        } as any),
+      ]);
+
+      const hasMore = movements.length === limit;
+      const lastItem = movements[movements.length - 1];
+
+      return {
+        data: movements.map(mapStockMovement),
+        pagination: {
+          total,
+          limit,
+          cursor: hasMore && lastItem ? (lastItem as any).id : null,
+          hasMore,
+        },
+      };
+    }
+
+    const allMovements = demoState()
+      .stockMovements.filter(
+        (movement) => movement.organizationId === context.organization.id,
+      )
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    return {
+      data: allMovements,
+      pagination: { total: allMovements.length, limit: allMovements.length, cursor: null, hasMore: false },
+    };
   }
 
   async createStockMovement(input: unknown, context: AuthContext) {
@@ -705,25 +807,48 @@ export class StockOpsApiService {
     const quantityChange =
       parsed.type === "OUTBOUND" ? -parsed.quantity : parsed.quantity;
 
-    if (quantityChange < 0) {
-      const movements = await this.listStockMovements(context);
-      assertEnoughStockForApi(movements, parsed.warehouseId, [
-        { productId: parsed.productId, quantity: parsed.quantity },
-      ]);
-    }
-
     if (dbMode()) {
-      const movement = await getPrisma().stockMovement.create({
-        data: {
-          organizationId: context.organization.id,
-          warehouseId: parsed.warehouseId,
-          productId: parsed.productId,
-          type: parsed.type,
+      const prisma = getPrisma();
+      const movement = await prisma.$transaction(async (tx: any) => {
+        // Lock balance row and check availability for outbound
+        if (quantityChange < 0) {
+          const bal = await adjustBalance(
+            tx,
+            context.organization.id,
+            parsed.productId,
+            parsed.warehouseId,
+            0, // probe only — will adjust after check
+          );
+          if (bal.available < parsed.quantity) {
+            throw new BadRequestException(
+              `Insufficient stock: ${parsed.productId}: requested ${parsed.quantity}, available ${bal.available}`,
+            );
+          }
+        }
+
+        const mov = await tx.stockMovement.create({
+          data: {
+            organizationId: context.organization.id,
+            warehouseId: parsed.warehouseId,
+            productId: parsed.productId,
+            type: parsed.type,
+            quantityChange,
+            note: parsed.note || null,
+            createdById: context.user.id,
+          },
+        });
+
+        await adjustBalance(
+          tx,
+          context.organization.id,
+          parsed.productId,
+          parsed.warehouseId,
           quantityChange,
-          note: parsed.note || null,
-          createdById: context.user.id,
-        },
+        );
+
+        return mov;
       });
+
       await this.audit(
         context,
         "CREATE",
@@ -732,6 +857,13 @@ export class StockOpsApiService {
         parsed.type,
       );
       return mapStockMovement(movement);
+    }
+
+    if (quantityChange < 0) {
+      const result = await this.listStockMovements(context);
+      assertEnoughStockForApi(result.data, parsed.warehouseId, [
+        { productId: parsed.productId, quantity: parsed.quantity },
+      ]);
     }
 
     const movement: StockMovement = {
@@ -756,16 +888,6 @@ export class StockOpsApiService {
     await this.ensureWarehouseExists(parsed.sourceWarehouseId, context);
     await this.ensureWarehouseExists(parsed.destinationWarehouseId, context);
 
-    const sourceMovements = (await this.listStockMovements(context)).filter(
-      (movement) =>
-        movement.productId === parsed.productId &&
-        movement.warehouseId === parsed.sourceWarehouseId,
-    );
-
-    assertEnoughStockForApi(sourceMovements, parsed.sourceWarehouseId, [
-      { productId: parsed.productId, quantity: parsed.quantity },
-    ]);
-
     if (dbMode()) {
       const prisma = getPrisma();
       const [sourceWarehouse, destinationWarehouse, transferMovementCount] =
@@ -789,6 +911,20 @@ export class StockOpsApiService {
       const reference = nextCode("TR", Math.floor(transferMovementCount / 2));
 
       await prisma.$transaction(async (tx: any) => {
+        // Lock source balance and check availability
+        const sourceBal = await adjustBalance(
+          tx,
+          context.organization.id,
+          parsed.productId,
+          parsed.sourceWarehouseId,
+          0,
+        );
+        if (sourceBal.available < parsed.quantity) {
+          throw new BadRequestException(
+            `Insufficient stock: ${parsed.productId}: requested ${parsed.quantity}, available ${sourceBal.available}`,
+          );
+        }
+
         await tx.stockMovement.createMany({
           data: [
             {
@@ -813,6 +949,22 @@ export class StockOpsApiService {
             },
           ],
         });
+
+        // Update both balances atomically
+        await adjustBalance(
+          tx,
+          context.organization.id,
+          parsed.productId,
+          parsed.sourceWarehouseId,
+          -parsed.quantity,
+        );
+        await adjustBalance(
+          tx,
+          context.organization.id,
+          parsed.productId,
+          parsed.destinationWarehouseId,
+          parsed.quantity,
+        );
       });
 
       await this.audit(context, "CREATE", "StockTransfer", reference, reference);
@@ -840,6 +992,15 @@ export class StockOpsApiService {
     if (!sourceWarehouse || !destinationWarehouse) {
       throw new NotFoundException("Warehouse not found.");
     }
+
+    const sourceMovements = state.stockMovements.filter(
+      (movement) =>
+        movement.productId === parsed.productId &&
+        movement.warehouseId === parsed.sourceWarehouseId,
+    );
+    assertEnoughStockForApi(sourceMovements, parsed.sourceWarehouseId, [
+      { productId: parsed.productId, quantity: parsed.quantity },
+    ]);
 
     const reference = nextCode(
       "TR",
@@ -884,35 +1045,67 @@ export class StockOpsApiService {
     return { movements, reference };
   }
 
-  async listSalesOrders(context: AuthContext): Promise<SalesOrder[]> {
+  async listSalesOrders(
+    context: AuthContext,
+    filters?: { cursor?: string; limit?: number },
+  ) {
     if (dbMode()) {
-      const orders = await getPrisma().salesOrder.findMany({
-        where: { organizationId: context.organization.id },
-        include: { lines: true },
-        orderBy: { createdAt: "desc" },
-      });
+      const prisma = getPrisma();
+      const limit = Math.min(Math.max(filters?.limit ?? 50, 1), 200);
+      const where = { organizationId: context.organization.id };
 
-      return orders.map((order: any) => ({
-        id: order.id,
-        organizationId: order.organizationId,
-        code: order.code,
-        customerName: order.customerName,
-        status: order.status,
-        createdAt: order.createdAt.toISOString(),
-        lines: order.lines.map((line: any) => ({
-          productId: line.productId,
-          quantity: line.quantity,
+      const cursorArgs = filters?.cursor
+        ? { skip: 1, cursor: { id: filters.cursor } }
+        : {};
+
+      const [total, orders] = await Promise.all([
+        prisma.salesOrder.count({ where }),
+        prisma.salesOrder.findMany({
+          where,
+          include: { lines: true },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          ...cursorArgs,
+        } as any),
+      ]);
+
+      const hasMore = orders.length === limit;
+      const lastItem = orders[orders.length - 1];
+
+      return {
+        data: orders.map((order: any) => ({
+          id: order.id,
+          organizationId: order.organizationId,
+          code: order.code,
+          customerName: order.customerName,
+          status: order.status,
+          createdAt: order.createdAt.toISOString(),
+          lines: order.lines.map((line: any) => ({
+            productId: line.productId,
+            quantity: line.quantity,
+          })),
         })),
-      }));
+        pagination: {
+          total,
+          limit,
+          cursor: hasMore && lastItem ? (lastItem as any).id : null,
+          hasMore,
+        },
+      };
     }
 
-    return demoState().salesOrders.filter(
+    const allOrders = demoState().salesOrders.filter(
       (order) => order.organizationId === context.organization.id,
     );
+    return {
+      data: allOrders,
+      pagination: { total: allOrders.length, limit: allOrders.length, cursor: null, hasMore: false },
+    };
   }
 
   async listOpenSalesOrders(context: AuthContext) {
-    return getOpenSalesOrders(await this.listSalesOrders(context));
+    const result = await this.listSalesOrders(context);
+    return getOpenSalesOrders(result.data);
   }
 
   async createSalesOrder(input: unknown, context: AuthContext) {
@@ -937,7 +1130,7 @@ export class StockOpsApiService {
       });
 
       await this.audit(context, "CREATE", "SalesOrder", order.id, order.code);
-      return (await this.listSalesOrders(context)).find((item) => item.id === order.id);
+      return (await this.listSalesOrders(context)).data.find((item) => item.id === order.id);
     }
 
     const state = demoState();
@@ -974,27 +1167,28 @@ export class StockOpsApiService {
           throw new NotFoundException("Sales order or default warehouse not found.");
         }
 
-        const movements = await tx.stockMovement.findMany({
-          where: {
-            organizationId: context.organization.id,
-            warehouseId: warehouse.id,
-            productId: { in: order.lines.map((line: any) => line.productId) },
-          },
-        });
-
-        assertEnoughStockForApi(
-          movements.map(mapStockMovement),
-          warehouse.id,
-          order.lines.map((line: any) => ({
-            productId: line.productId,
-            quantity: line.quantity,
-          })),
-        );
+        // Check availability via StockBalance with row lock
+        for (const line of order.lines) {
+          const bal = await adjustBalance(
+            tx,
+            context.organization.id,
+            line.productId,
+            warehouse.id,
+            0, // probe
+          );
+          if (bal.available < line.quantity) {
+            throw new BadRequestException(
+              `Insufficient stock: ${line.productId}: requested ${line.quantity}, available ${bal.available}`,
+            );
+          }
+        }
 
         await tx.salesOrder.update({
           where: { id: order.id },
           data: { status: "CONFIRMED" },
         });
+
+        // Create stock movements + update balances + create reservations
         await tx.stockMovement.createMany({
           data: order.lines.map((line: any) => ({
             organizationId: context.organization.id,
@@ -1007,10 +1201,41 @@ export class StockOpsApiService {
             createdById: context.user.id,
           })),
         });
+
+        for (const line of order.lines) {
+          await adjustBalance(
+            tx,
+            context.organization.id,
+            line.productId,
+            warehouse.id,
+            -line.quantity,
+          );
+        }
+
+        // Create reservations
+        await tx.stockReservation.createMany({
+          data: order.lines.map((line: any) => ({
+            organizationId: context.organization.id,
+            salesOrderId: order.id,
+            productId: line.productId,
+            warehouseId: warehouse.id,
+            quantity: line.quantity,
+          })),
+        });
+
+        for (const line of order.lines) {
+          await adjustReservation(
+            tx,
+            context.organization.id,
+            line.productId,
+            warehouse.id,
+            line.quantity,
+          );
+        }
       });
 
       await this.audit(context, "CONFIRM", "SalesOrder", orderId, orderId);
-      return (await this.listSalesOrders(context)).find((order) => order.id === orderId);
+      return (await this.listSalesOrders(context)).data.find((order) => order.id === orderId);
     }
 
     const state = demoState();
@@ -1046,37 +1271,69 @@ export class StockOpsApiService {
     return order;
   }
 
-  async listPurchaseOrders(context: AuthContext): Promise<PurchaseOrder[]> {
+  async listPurchaseOrders(
+    context: AuthContext,
+    filters?: { cursor?: string; limit?: number },
+  ) {
     if (dbMode()) {
-      const orders = await getPrisma().purchaseOrder.findMany({
-        where: { organizationId: context.organization.id },
-        include: { lines: true },
-        orderBy: { createdAt: "desc" },
-      });
+      const prisma = getPrisma();
+      const limit = Math.min(Math.max(filters?.limit ?? 50, 1), 200);
+      const where = { organizationId: context.organization.id };
 
-      return orders.map((order: any) => ({
-        id: order.id,
-        organizationId: order.organizationId,
-        supplierId: order.supplierId,
-        code: order.code,
-        status: order.status,
-        expectedDate: order.expectedDate?.toISOString(),
-        createdAt: order.createdAt.toISOString(),
-        lines: order.lines.map((line: any) => ({
-          productId: line.productId,
-          quantity: line.quantity,
-          receivedQuantity: line.receivedQuantity,
+      const cursorArgs = filters?.cursor
+        ? { skip: 1, cursor: { id: filters.cursor } }
+        : {};
+
+      const [total, orders] = await Promise.all([
+        prisma.purchaseOrder.count({ where }),
+        prisma.purchaseOrder.findMany({
+          where,
+          include: { lines: true },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          ...cursorArgs,
+        } as any),
+      ]);
+
+      const hasMore = orders.length === limit;
+      const lastItem = orders[orders.length - 1];
+
+      return {
+        data: orders.map((order: any) => ({
+          id: order.id,
+          organizationId: order.organizationId,
+          supplierId: order.supplierId,
+          code: order.code,
+          status: order.status,
+          expectedDate: order.expectedDate?.toISOString(),
+          createdAt: order.createdAt.toISOString(),
+          lines: order.lines.map((line: any) => ({
+            productId: line.productId,
+            quantity: line.quantity,
+            receivedQuantity: line.receivedQuantity,
+          })),
         })),
-      }));
+        pagination: {
+          total,
+          limit,
+          cursor: hasMore && lastItem ? (lastItem as any).id : null,
+          hasMore,
+        },
+      };
     }
 
-    return demoState().purchaseOrders.filter(
+    const allOrders = demoState().purchaseOrders.filter(
       (order) => order.organizationId === context.organization.id,
     );
+    return {
+      data: allOrders,
+      pagination: { total: allOrders.length, limit: allOrders.length, cursor: null, hasMore: false },
+    };
   }
 
   async listOpenPurchaseOrders(context: AuthContext) {
-    return getOpenPurchaseOrders(await this.listPurchaseOrders(context));
+    const result = await this.listPurchaseOrders(context);
+    return getOpenPurchaseOrders(result.data);
   }
 
   async createPurchaseOrder(input: unknown, context: AuthContext) {
@@ -1103,7 +1360,7 @@ export class StockOpsApiService {
       });
 
       await this.audit(context, "CREATE", "PurchaseOrder", order.id, order.code);
-      return (await this.listPurchaseOrders(context)).find(
+      return (await this.listPurchaseOrders(context)).data.find(
         (item) => item.id === order.id,
       );
     }
@@ -1177,6 +1434,19 @@ export class StockOpsApiService {
             createdById: context.user.id,
           })),
         });
+
+        // Update stock balances
+        for (const line of receipts) {
+          const delta = line.quantity - line.receivedQuantity;
+          await adjustBalance(
+            tx,
+            context.organization.id,
+            line.productId,
+            warehouse.id,
+            delta,
+          );
+        }
+
         await tx.purchaseOrder.update({
           where: { id: order.id },
           data: { status: "COMPLETED" },
@@ -1184,7 +1454,7 @@ export class StockOpsApiService {
       });
 
       await this.audit(context, "RECEIVE", "PurchaseOrder", orderId, orderId);
-      return (await this.listPurchaseOrders(context)).find(
+      return (await this.listPurchaseOrders(context)).data.find(
         (order) => order.id === orderId,
       );
     }
@@ -1230,11 +1500,28 @@ export class StockOpsApiService {
   
   async listCustomers(context: AuthContext, query?: any) {
     if (dbMode()) {
-      const customers = await getPrisma().customer.findMany({
-        where: { organizationId: context.organization.id },
-        orderBy: { name: "asc" },
-      });
-      return customers.map((c: any) => ({
+      const prisma = getPrisma();
+      const limit = Math.min(Math.max(parseInt(query?.limit, 10) || 50, 1), 200);
+      const where = { organizationId: context.organization.id };
+
+      const cursorArgs = query?.cursor
+        ? { skip: 1, cursor: { id: query.cursor } }
+        : {};
+
+      const [total, customers] = await Promise.all([
+        prisma.customer.count({ where }),
+        prisma.customer.findMany({
+          where,
+          orderBy: { name: "asc" },
+          take: limit,
+          ...cursorArgs,
+        } as any),
+      ]);
+
+      const hasMore = customers.length === limit;
+      const lastItem = customers[customers.length - 1];
+
+      const data = customers.map((c: any) => ({
         ...c,
         email: c.email ?? undefined,
         phone: c.phone ?? undefined,
@@ -1242,6 +1529,17 @@ export class StockOpsApiService {
         address: c.address ?? undefined,
         createdAt: c.createdAt.toISOString(),
       }));
+
+      if (!query) return data; // backward compat: no query = flat array
+      return {
+        data,
+        pagination: {
+          total,
+          limit,
+          cursor: hasMore && lastItem ? (lastItem as any).id : null,
+          hasMore,
+        },
+      };
     }
     return demoState().customers.filter((c) => c.organizationId === context.organization.id);
   }
@@ -1313,12 +1611,29 @@ export class StockOpsApiService {
 
   async listInvoices(context: AuthContext, query?: any) {
     if (dbMode()) {
-      const invoices = await getPrisma().invoice.findMany({
-        where: { organizationId: context.organization.id },
-        include: { lines: true },
-        orderBy: { createdAt: "desc" },
-      });
-      return invoices.map((inv: any) => ({
+      const prisma = getPrisma();
+      const limit = Math.min(Math.max(parseInt(query?.limit, 10) || 50, 1), 200);
+      const where = { organizationId: context.organization.id };
+
+      const cursorArgs = query?.cursor
+        ? { skip: 1, cursor: { id: query.cursor } }
+        : {};
+
+      const [total, invoices] = await Promise.all([
+        prisma.invoice.count({ where }),
+        prisma.invoice.findMany({
+          where,
+          include: { lines: true },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          ...cursorArgs,
+        } as any),
+      ]);
+
+      const hasMore = invoices.length === limit;
+      const lastItem = invoices[invoices.length - 1];
+
+      const data = invoices.map((inv: any) => ({
         ...inv,
         subtotal: Number(inv.subtotal),
         discountAmount: Number(inv.discountAmount),
@@ -1333,6 +1648,17 @@ export class StockOpsApiService {
         })),
         createdAt: inv.createdAt.toISOString(),
       }));
+
+      if (!query) return data;
+      return {
+        data,
+        pagination: {
+          total,
+          limit,
+          cursor: hasMore && lastItem ? (lastItem as any).id : null,
+          hasMore,
+        },
+      };
     }
     return demoState().invoices.filter((i) => i.organizationId === context.organization.id);
   }
@@ -1830,6 +2156,17 @@ export class StockOpsApiService {
         })),
       });
 
+      // Update stock balances
+      for (const line of salesReturn.lines) {
+        await adjustBalance(
+          tx,
+          context.organization.id,
+          line.productId,
+          warehouse.id,
+          line.quantity,
+        );
+      }
+
       await Promise.all(
         salesReturn.lines.map((line: any) =>
           tx.salesReturnLine.update({
@@ -2212,6 +2549,23 @@ export class StockOpsApiService {
         data: { status: "SHIPPED" },
       });
 
+      // Release reservations on shipment
+      const reservations = await tx.stockReservation.findMany({
+        where: { organizationId: context.organization.id, salesOrderId: order.id },
+      });
+      for (const res of reservations) {
+        await adjustReservation(
+          tx,
+          context.organization.id,
+          res.productId,
+          res.warehouseId,
+          -res.quantity,
+        );
+      }
+      await tx.stockReservation.deleteMany({
+        where: { organizationId: context.organization.id, salesOrderId: order.id },
+      });
+
       const shipment = await tx.shipment.create({
         data: {
           organizationId: context.organization.id,
@@ -2302,6 +2656,205 @@ export class StockOpsApiService {
 
       return { orderId: order.id, status: "DELIVERED" as const };
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Stock Reconciliation (Phase 8)
+  // ---------------------------------------------------------------------------
+
+  async runReconciliation(context: AuthContext, autoFix = false) {
+    if (!dbMode()) {
+      throw new BadRequestException("Reconciliation requires database mode.");
+    }
+
+    const prisma = getPrisma();
+    const orgId = context.organization.id;
+
+    // Compare ledger sums vs StockBalance
+    const ledgerSums = await prisma.$queryRawUnsafe<
+      { productId: string; warehouseId: string; ledger_total: number }[]
+    >(
+      `SELECT "productId", "warehouseId", SUM("quantityChange")::int as ledger_total
+       FROM "StockMovement"
+       WHERE "organizationId" = $1
+       GROUP BY "productId", "warehouseId"`,
+      orgId,
+    );
+
+    const balances = await prisma.$queryRawUnsafe<
+      { productId: string; warehouseId: string; onHand: number; id: string }[]
+    >(
+      `SELECT "id", "productId", "warehouseId", "onHand"
+       FROM "StockBalance"
+       WHERE "organizationId" = $1`,
+      orgId,
+    );
+
+    const balanceMap = new Map(
+      balances.map((b) => [`${b.productId}:${b.warehouseId}`, b]),
+    );
+    const ledgerMap = new Map(
+      ledgerSums.map((l) => [`${l.productId}:${l.warehouseId}`, Number(l.ledger_total)]),
+    );
+
+    // Find all unique keys across both
+    const allKeys = new Set([...balanceMap.keys(), ...ledgerMap.keys()]);
+    const mismatches: {
+      productId: string;
+      warehouseId: string;
+      ledgerTotal: number;
+      balanceOnHand: number;
+      delta: number;
+      fixed: boolean;
+    }[] = [];
+
+    for (const key of allKeys) {
+      const [productId, warehouseId] = key.split(":");
+      const ledgerTotal = ledgerMap.get(key) ?? 0;
+      const balance = balanceMap.get(key);
+      const balanceOnHand = balance ? Number(balance.onHand) : 0;
+
+      if (ledgerTotal !== balanceOnHand) {
+        const delta = ledgerTotal - balanceOnHand;
+        let fixed = false;
+
+        if (autoFix && balance) {
+          await prisma.$executeRawUnsafe(
+            `UPDATE "StockBalance"
+             SET "onHand" = $1, "available" = $1 - "reserved", "version" = "version" + 1, "updatedAt" = NOW()
+             WHERE "id" = $2`,
+            ledgerTotal,
+            balance.id,
+          );
+          fixed = true;
+        } else if (autoFix && !balance) {
+          // Balance row missing — create it
+          await prisma.$executeRawUnsafe(
+            `INSERT INTO "StockBalance" ("id", "organizationId", "productId", "warehouseId", "onHand", "reserved", "available", "version", "updatedAt")
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, 0, $4, 0, NOW())
+             ON CONFLICT ("organizationId", "productId", "warehouseId")
+             DO UPDATE SET "onHand" = $4, "available" = $4 - "StockBalance"."reserved", "version" = "StockBalance"."version" + 1, "updatedAt" = NOW()`,
+            orgId,
+            productId,
+            warehouseId,
+            ledgerTotal,
+          );
+          fixed = true;
+        }
+
+        mismatches.push({
+          productId,
+          warehouseId,
+          ledgerTotal,
+          balanceOnHand,
+          delta,
+          fixed,
+        });
+      }
+    }
+
+    // Store reconciliation record
+    const recon = await prisma.$queryRawUnsafe<any[]>(
+      `INSERT INTO "StockReconciliation" ("id", "organizationId", "status", "totalChecked", "mismatchCount", "autoFixed", "details", "createdById", "createdAt")
+       VALUES (gen_random_uuid(), $1, 'COMPLETED', $2, $3, $4, $5::jsonb, $6, NOW())
+       RETURNING *`,
+      orgId,
+      allKeys.size,
+      mismatches.length,
+      mismatches.filter((m) => m.fixed).length,
+      JSON.stringify(mismatches),
+      context.user.id,
+    );
+
+    await this.audit(context, "STOCKTAKE", "StockReconciliation", recon[0].id, `${mismatches.length} mismatch(es)`);
+
+    return {
+      id: recon[0].id,
+      totalChecked: allKeys.size,
+      mismatchCount: mismatches.length,
+      autoFixed: mismatches.filter((m) => m.fixed).length,
+      mismatches,
+    };
+  }
+
+  async listReconciliations(context: AuthContext) {
+    if (!dbMode()) {
+      return [];
+    }
+
+    const prisma = getPrisma();
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT "id", "organizationId", "status", "totalChecked", "mismatchCount", "autoFixed", "createdAt"
+       FROM "StockReconciliation"
+       WHERE "organizationId" = $1
+       ORDER BY "createdAt" DESC
+       LIMIT 50`,
+      context.organization.id,
+    );
+
+    return rows.map((r) => ({
+      id: r.id,
+      status: r.status,
+      totalChecked: Number(r.totalChecked),
+      mismatchCount: Number(r.mismatchCount),
+      autoFixed: Number(r.autoFixed),
+      createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+    }));
+  }
+
+  private async listDatabaseStockRows(
+    context: AuthContext,
+    filters?: { cursor?: string; limit?: number },
+  ) {
+    const prisma = getPrisma();
+    const limit = Math.min(Math.max(filters?.limit ?? 50, 1), 200);
+
+    const cursorClause = filters?.cursor
+      ? `AND sb."id" > $2`
+      : "";
+    const params: unknown[] = [context.organization.id];
+    if (filters?.cursor) params.push(filters.cursor);
+
+    const countResult = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT COUNT(*)::int as total
+       FROM "StockBalance" sb
+       JOIN "Product" p ON p."id" = sb."productId"
+       WHERE sb."organizationId" = $1 AND p."isActive" = true`,
+      context.organization.id,
+    );
+    const total = countResult[0]?.total ?? 0;
+
+    const limitParam = params.length + 1;
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT sb."id", sb."productId", sb."warehouseId", sb."onHand", sb."reserved", sb."available",
+              p."id" as p_id, p."organizationId" as p_orgId, p."sku", p."name" as p_name,
+              p."barcode", p."category", p."description", p."minimumStock", p."isActive",
+              p."unitPrice",
+              w."id" as w_id, w."organizationId" as w_orgId, w."code" as w_code,
+              w."name" as w_name, w."isDefault"
+       FROM "StockBalance" sb
+       JOIN "Product" p ON p."id" = sb."productId"
+       JOIN "Warehouse" w ON w."id" = sb."warehouseId"
+       WHERE sb."organizationId" = $1 AND p."isActive" = true
+       ${cursorClause}
+       ORDER BY sb."id" ASC
+       LIMIT $${limitParam}`,
+      ...params,
+      limit,
+    );
+
+    const hasMore = rows.length === limit;
+    const lastItem = rows[rows.length - 1];
+
+    return {
+      data: rows.map(mapBalanceToStockRow),
+      pagination: {
+        total,
+        limit,
+        cursor: hasMore && lastItem ? lastItem.id : null,
+        hasMore,
+      },
+    };
   }
 
   private async listDatabaseProducts(context: AuthContext): Promise<Product[]> {
@@ -2414,7 +2967,7 @@ export class StockOpsApiService {
 
   private async audit(
     context: AuthContext,
-    action: "CREATE" | "UPDATE" | "CONFIRM" | "RECEIVE" | "CANCEL" | "PICK" | "PACK" | "SHIP",
+    action: "CREATE" | "UPDATE" | "CONFIRM" | "RECEIVE" | "CANCEL" | "PICK" | "PACK" | "SHIP" | "STOCKTAKE",
     entityType: string,
     entityId: string,
     summary: string,
@@ -2427,7 +2980,7 @@ export class StockOpsApiService {
       data: {
         organizationId: context.organization.id,
         actorId: context.user.id,
-        action,
+        action: action as any,
         entityType,
         entityId,
         summary,

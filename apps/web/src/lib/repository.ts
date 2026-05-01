@@ -76,6 +76,7 @@ import {
 import {
   assertEnoughStock,
   buildStockRows,
+  buildStockRowsFromBalances,
   getOpenPurchaseOrders,
   getOpenSalesOrders,
   getStockOnHand,
@@ -522,6 +523,7 @@ export async function getAppSnapshot(
     products,
     suppliers,
     stockMovements,
+    stockBalances,
     salesOrders,
     purchaseOrders,
     salesReturns,
@@ -554,6 +556,9 @@ export async function getAppSnapshot(
       orderBy: { createdAt: "desc" },
       take: 200,
     }),
+    (prisma as any).stockBalance?.findMany?.({
+      where: { organizationId },
+    }).catch(() => []) ?? Promise.resolve([]),
     prisma.salesOrder.findMany({
       where: { organizationId },
       include: { lines: true },
@@ -667,11 +672,10 @@ export async function getAppSnapshot(
     role: m.role as Role,
     createdAt: iso(m.createdAt),
   }));
-  const stockRows = buildStockRows(
-    mappedProducts,
-    mappedWarehouses,
-    mappedMovements,
-  );
+  // Prefer StockBalance table (Phase 8) over in-memory calculation
+  const stockRows = (stockBalances as any[]).length > 0
+    ? buildStockRowsFromBalances(mappedProducts, mappedWarehouses, stockBalances as any[])
+    : buildStockRows(mappedProducts, mappedWarehouses, mappedMovements);
 
   const mappedSalesReturns: SalesReturn[] = salesReturns.map((salesReturn) => ({
     id: salesReturn.id,

@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -84,8 +85,15 @@ export class StockController {
   @RequirePermissions("view_dashboard")
   @ApiOperation({ summary: "List current stock by product and warehouse." })
   @ApiOkResponse({ schema: arrayOf(stockRowSchema) })
-  rows(@CurrentAuth() context: AuthContext) {
-    return this.stockOps.listStockRows(context);
+  rows(
+    @CurrentAuth() context: AuthContext,
+    @Query("cursor") cursor?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.stockOps.listStockRows(context, {
+      cursor,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
   }
 
   @Get("alerts")
@@ -100,8 +108,15 @@ export class StockController {
   @RequirePermissions("view_dashboard")
   @ApiOperation({ summary: "List recent stock movements." })
   @ApiOkResponse({ schema: arrayOf(stockMovementResponseSchema) })
-  movements(@CurrentAuth() context: AuthContext) {
-    return this.stockOps.listStockMovements(context);
+  movements(
+    @CurrentAuth() context: AuthContext,
+    @Query("cursor") cursor?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.stockOps.listStockMovements(context, {
+      cursor,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
   }
 
   @Post("movements")
@@ -122,5 +137,24 @@ export class StockController {
   @ApiValidationError()
   createTransfer(@CurrentAuth() context: AuthContext, @Body() body: unknown) {
     return this.stockOps.createStockTransfer(body, context);
+  }
+
+  @Post("reconcile")
+  @RequirePermissions("manage_stock")
+  @ApiOperation({
+    summary: "Run stock reconciliation comparing ledger totals against stock balances.",
+  })
+  reconcile(
+    @CurrentAuth() context: AuthContext,
+    @Body() body: { autoFix?: boolean },
+  ) {
+    return this.stockOps.runReconciliation(context, body?.autoFix ?? false);
+  }
+
+  @Get("reconciliations")
+  @RequirePermissions("view_dashboard")
+  @ApiOperation({ summary: "List past reconciliation runs." })
+  listReconciliations(@CurrentAuth() context: AuthContext) {
+    return this.stockOps.listReconciliations(context);
   }
 }

@@ -6,6 +6,7 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -47,8 +48,15 @@ export class PurchaseOrdersController {
   @RequirePermissions("view_dashboard")
   @ApiOperation({ summary: "List purchase orders." })
   @ApiOkResponse({ schema: arrayOf(purchaseOrderSchema) })
-  list(@CurrentAuth() context: AuthContext) {
-    return this.stockOps.listPurchaseOrders(context);
+  list(
+    @CurrentAuth() context: AuthContext,
+    @Query("cursor") cursor?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.stockOps.listPurchaseOrders(context, {
+      cursor,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
   }
 
   @Get("open")

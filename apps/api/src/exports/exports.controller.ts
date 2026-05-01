@@ -56,8 +56,8 @@ export class ExportsController {
   @ApiOperation({ summary: "Export stock levels as CSV." })
   @ApiOkResponse({ description: "CSV file" })
   async stockCSV(@CurrentAuth() ctx: AuthContext, @Res() res: Response) {
-    const rows = await this.stockOps.listStockRows(ctx);
-    const csv = exportStockCSV(rows);
+    const result = await this.stockOps.listStockRows(ctx, { limit: 200 });
+    const csv = exportStockCSV(result.data);
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="stock.csv"');
     res.send(csv);
@@ -68,8 +68,8 @@ export class ExportsController {
   @ApiOperation({ summary: "Export stock movements as CSV." })
   @ApiOkResponse({ description: "CSV file" })
   async movementsCSV(@CurrentAuth() ctx: AuthContext, @Res() res: Response) {
-    const movements = await this.stockOps.listStockMovements(ctx);
-    const csv = exportMovementsCSV(movements);
+    const result = await this.stockOps.listStockMovements(ctx, { limit: 200 });
+    const csv = exportMovementsCSV(result.data);
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="movements.csv"');
     res.send(csv);
@@ -80,9 +80,8 @@ export class ExportsController {
   @ApiOperation({ summary: "Export customers as CSV." })
   @ApiOkResponse({ description: "CSV file" })
   async customersCSV(@CurrentAuth() ctx: AuthContext, @Res() res: Response) {
-    const customers = await this.stockOps.listCustomers(ctx);
-    const items = customers;
-    const csv = exportCustomersCSV(items);
+    const customers = await this.stockOps.listCustomers(ctx) as any[];
+    const csv = exportCustomersCSV(customers);
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="customers.csv"');
     res.send(csv);
@@ -108,8 +107,8 @@ export class ExportsController {
   @ApiOperation({ summary: "Export stock levels as Excel." })
   @ApiOkResponse({ description: "XLSX file" })
   async stockExcel(@CurrentAuth() ctx: AuthContext, @Res() res: Response) {
-    const rows = await this.stockOps.listStockRows(ctx);
-    const buffer = await exportStockExcel(rows);
+    const result = await this.stockOps.listStockRows(ctx, { limit: 200 });
+    const buffer = await exportStockExcel(result.data);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", 'attachment; filename="stock.xlsx"');
     res.send(buffer);
@@ -127,17 +126,15 @@ export class ExportsController {
     @Param("id") invoiceId: string,
     @Res() res: Response,
   ) {
-    const invoices = await this.stockOps.listInvoices(ctx);
-    const allInvoices = invoices;
-    const invoice = allInvoices.find((i) => i.id === invoiceId) as Invoice;
+    const invoices = await this.stockOps.listInvoices(ctx) as any[];
+    const invoice = invoices.find((i: any) => i.id === invoiceId) as Invoice;
     if (!invoice) {
       res.status(404).json({ message: "Invoice not found." });
       return;
     }
 
-    const customers = await this.stockOps.listCustomers(ctx);
-    const allCustomers = customers;
-    const customer = allCustomers.find((c) => c.id === invoice.customerId);
+    const customers = await this.stockOps.listCustomers(ctx) as any[];
+    const customer = customers.find((c: any) => c.id === invoice.customerId);
     if (!customer) {
       res.status(404).json({ message: "Customer not found." });
       return;
