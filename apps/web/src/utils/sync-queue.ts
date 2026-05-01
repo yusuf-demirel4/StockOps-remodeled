@@ -7,7 +7,7 @@ export interface SyncAction {
   id: string; // idempotency key
   method: "POST" | "PUT" | "PATCH" | "DELETE";
   url: string;
-  body: any;
+  body: unknown;
   status: "PENDING" | "SYNCING" | "FAILED";
   retryCount: number;
   timestamp: number;
