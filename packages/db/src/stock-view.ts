@@ -47,7 +47,7 @@ export async function queryStockOnHand(
 
   const rows = await getPrisma().$queryRawUnsafe<any[]>(query, ...params);
 
-  return rows.map((row) => ({
+  return rows.map((row: any) => ({
     organizationId: row.organizationId,
     productId: row.productId,
     warehouseId: row.warehouseId,
