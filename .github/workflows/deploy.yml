@@ -1,0 +1,105 @@
+name: Continuous Deployment
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build_and_push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}/api
+            ghcr.io/${{ github.repository }}/web
+            ghcr.io/${{ github.repository }}/worker
+          tags: |
+            type=semver,pattern={{version}}
+            type=ref,event=branch
+            type=sha
+
+      # In a real environment, you'd log in to a container registry here:
+      # - name: Log in to the Container registry
+      #   uses: docker/login-action@v3
+      #   with: ...
+
+      - name: Build API
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.api
+          push: false # Set to true in real environment
+          tags: ghcr.io/${{ github.repository }}/api:${{ steps.meta.outputs.version }}
+
+      - name: Build Web
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.web
+          push: false # Set to true in real environment
+          tags: ghcr.io/${{ github.repository }}/web:${{ steps.meta.outputs.version }}
+
+      - name: Build Worker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.worker
+          push: false # Set to true in real environment
+          tags: ghcr.io/${{ github.repository }}/worker:${{ steps.meta.outputs.version }}
+
+  migrate:
+    name: Database Migration
+    runs-on: ubuntu-latest
+    needs: build_and_push
+    environment: ${{ inputs.environment || 'production' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Prisma Migrations
+        run: npm run prisma:migrate:deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  deploy:
+    name: Deploy to Environment
+    runs-on: ubuntu-latest
+    needs: [migrate, build_and_push]
+    environment: ${{ inputs.environment || 'production' }}
+    steps:
+      - name: Deploy Placeholder
+        run: |
+          echo "Deploying version ${{ needs.build_and_push.outputs.image_tag }} to ${{ inputs.environment || 'production' }}"
+          echo "Run deploy scripts or trigger webhook here."

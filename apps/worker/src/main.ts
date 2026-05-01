@@ -1,6 +1,8 @@
+import * as http from "node:http";
 import { createLogger } from "@stockops/core/logger";
 import { createQueueWorker } from "@stockops/queue";
 
+import { workerMetricsRegistry } from "./metrics";
 import { createJob, handleJob } from "./queue";
 
 const logger = createLogger({ service: "stockops-worker" });
@@ -22,7 +24,26 @@ async function main() {
     },
   }, "Worker started");
 
-  registerShutdown(queueWorker.close);
+  const metricsPort = process.env.WORKER_METRICS_PORT ? parseInt(process.env.WORKER_METRICS_PORT) : 4001;
+  const metricsServer = http.createServer(async (req, res) => {
+    if (req.url === "/metrics" && req.method === "GET") {
+      res.setHeader("Content-Type", workerMetricsRegistry.contentType);
+      const metrics = await workerMetricsRegistry.metrics();
+      res.end(metrics);
+    } else {
+      res.statusCode = 404;
+      res.end("Not Found");
+    }
+  });
+
+  metricsServer.listen(metricsPort, "0.0.0.0", () => {
+    logger.info({ port: metricsPort }, "Worker metrics server started");
+  });
+
+  registerShutdown(async () => {
+    await new Promise<void>((resolve) => metricsServer.close(() => resolve()));
+    await queueWorker.close();
+  });
 }
 
 void main();

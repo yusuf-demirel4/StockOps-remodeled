@@ -70,7 +70,7 @@ async function main() {
     where: { organizationId: orgId },
   });
 
-  const warehouseIds: string[] = existingWarehouses.map((w) => w.id);
+  const warehouseIds: string[] = existingWarehouses.map((w: any) => w.id);
 
   for (let i = existingWarehouses.length; i < WAREHOUSE_COUNT; i++) {
     const wh = await prisma.warehouse.create({
@@ -117,7 +117,7 @@ async function main() {
     where: { organizationId: orgId },
     select: { id: true },
   });
-  const productIds = allProducts.map((p) => p.id);
+  const productIds = allProducts.map((p: any) => p.id);
   console.log(`  ${productIds.length} products ready`);
 
   // Create stock movements in batches

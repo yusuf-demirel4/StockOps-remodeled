@@ -15,7 +15,10 @@
     "@stockops/db": "*",
     "@stockops/integration-shopify": "*",
     "@stockops/integration-woocommerce": "*",
-    "@stockops/queue": "*"
+    "@stockops/integration-quickbooks": "*",
+    "@stockops/integration-xero": "*",
+    "@stockops/queue": "*",
+    "prom-client": "^15.1.3"
   },
   "devDependencies": {
     "@types/node": "^20",
