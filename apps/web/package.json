@@ -17,8 +17,11 @@
     "playwright:install": "playwright install --with-deps chromium"
   },
   "dependencies": {
+    "@google/genai": "^1.50.1",
     "@stockops/core": "*",
     "@stockops/db": "*",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.48.1",
     "@zxing/browser": "^0.1.5",
     "clsx": "^2.1.1",
     "lucide-react": "^1.11.0",
