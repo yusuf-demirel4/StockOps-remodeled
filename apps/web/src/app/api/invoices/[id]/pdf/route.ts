@@ -6,11 +6,12 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const context = await requireAuth();
-    const invoice = await getInvoice(params.id, context);
+    const invoice = await getInvoice(id, context);
 
     if (!invoice) {
       return new NextResponse("Fatura bulunamadı.", { status: 404 });

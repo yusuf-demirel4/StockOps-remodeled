@@ -1640,7 +1640,7 @@ export async function createCreditNote(input: unknown, context: AuthContext) {
     0,
   );
 
-  const creditNote = await prisma.creditNote.create({
+  const creditNote = await (prisma as any).creditNote.create({
     data: {
       organizationId: context.organization.id,
       customerId: customer.id,

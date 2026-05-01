@@ -23,9 +23,10 @@ const FILENAME_MAP: Record<Entity, string> = {
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { entity: string } }
+  { params }: { params: Promise<{ entity: string }> }
 ) {
-  const entity = params.entity as Entity;
+  const { entity: rawEntity } = await params;
+  const entity = rawEntity as Entity;
 
   if (!ALLOWED_ENTITIES.includes(entity)) {
     return new NextResponse("Geçersiz varlık türü.", { status: 400 });

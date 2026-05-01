@@ -14,8 +14,9 @@ export const metadata = {
 export default async function CreditNoteDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const context = await requireAuth();
   const isDbMode = getDataSourceMode() === "database";
 
@@ -23,9 +24,9 @@ export default async function CreditNoteDetailPage({
   let note: any = null;
 
   if (isDbMode) {
-    note = await getPrisma().creditNote.findFirst({
+    note = await (getPrisma() as any).creditNote.findFirst({
       where: {
-        id: params.id,
+        id: id,
         organizationId: context.organization.id,
       },
       include: {
@@ -35,7 +36,7 @@ export default async function CreditNoteDetailPage({
     });
   } else {
     const demoNotes = getDemoCreditNotes(context);
-    note = demoNotes.find((n) => n.id === params.id) || null;
+    note = demoNotes.find((n) => n.id === id) || null;
   }
 
   if (!note) {
