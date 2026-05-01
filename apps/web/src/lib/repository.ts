@@ -92,7 +92,7 @@ import { hashPassword } from "@stockops/core/password";
 import type {
   AppSnapshot,
   AuthContext,
-  CreditNote,
+
   InvoiceStatus,
   PaymentMethod,
   Customer,
@@ -3163,7 +3163,7 @@ export async function getCustomer(customerId: string, context: AuthContext) {
     const customer = customers.find((c) => c.id === customerId);
     if (!customer) return null;
     // Demo modda ilişkili veriyi state'den çek
-    const { default: demoStore } = await import("@/lib/demo-store") as any;
+    await import("@/lib/demo-store");
     return { customer, orders: [], invoices: [], priceTiers: [] };
   }
 

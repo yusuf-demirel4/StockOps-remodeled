@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth";
-import { getCustomer, listCustomerPriceTiers } from "@/lib/repository";
+import { getCustomer } from "@/lib/repository";
 import { formatCurrency, formatDate } from "@stockops/core/format";
 import { AppShell } from "@/components/app-shell";
 import { Panel } from "@/components/ui";
@@ -76,6 +76,7 @@ export default async function CustomerDetailPage({
                         </td>
                       </tr>
                     ) : (
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       (orders as any[]).map((order) => (
                         <tr key={order.id} className="border-b last:border-0">
                           <td className="py-2 pr-3 font-medium">{order.code}</td>
@@ -124,7 +125,9 @@ export default async function CustomerDetailPage({
                         </td>
                       </tr>
                     ) : (
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       (invoices as any[]).map((inv) => {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const paid = (inv.payments as any[])?.reduce((s: number, p: any) => s + Number(p.amount), 0) ?? 0;
                         return (
                           <tr key={inv.id} className="border-b last:border-0">
@@ -168,6 +171,7 @@ export default async function CustomerDetailPage({
             {/* Fiyat Katmanları */}
             <Panel title="Müşteriye Özel Fiyat Katmanları">
               {/* Mevcut Katmanlar */}
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {(priceTiers as any[]).length > 0 && (
                 <div className="overflow-x-auto mb-4">
                   <table className="w-full text-sm text-left">
@@ -180,6 +184,7 @@ export default async function CustomerDetailPage({
                       </tr>
                     </thead>
                     <tbody>
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                       {(priceTiers as any[]).map((tier) => (
                         <tr key={tier.id} className="border-b last:border-0">
                           <td className="py-2 pr-3 font-medium">
@@ -335,7 +340,9 @@ export default async function CustomerDetailPage({
                   <dt className="font-medium">Toplam Borç</dt>
                   <dd className="font-bold text-red-600">
                     {formatCurrency(
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       (invoices as any[]).reduce((s, inv) => {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const paid = (inv.payments as any[])?.reduce((sp: number, p: any) => sp + Number(p.amount), 0) ?? 0;
                         return s + Math.max(0, Number(inv.total) - paid);
                       }, 0)

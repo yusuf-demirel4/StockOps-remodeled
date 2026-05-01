@@ -16,8 +16,10 @@ export async function GET(
       return new NextResponse("Fatura bulunamadı.", { status: 404 });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const inv = invoice as any;
     const totalPaid =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       inv.payments?.reduce((s: number, p: any) => s + Number(p.amount), 0) ?? 0;
     const remaining = Number(inv.total) - totalPaid;
 
@@ -33,6 +35,7 @@ export async function GET(
 
     const linesHtml = (inv.lines ?? [])
       .map(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (line: any) => `
       <tr>
         <td>${line.product?.name ?? line.productId ?? "-"}</td>

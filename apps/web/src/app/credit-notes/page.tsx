@@ -4,7 +4,6 @@ import { formatCurrency, formatDate, creditNoteStatusLabel } from "@stockops/cor
 import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/ui";
 import Link from "next/link";
-import { FileDown } from "lucide-react";
 
 export const metadata = {
   title: "Kredi Notları | StockOps",

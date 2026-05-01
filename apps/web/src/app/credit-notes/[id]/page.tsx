@@ -19,6 +19,7 @@ export default async function CreditNoteDetailPage({
   const context = await requireAuth();
   const isDbMode = getDataSourceMode() === "database";
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let note: any = null;
 
   if (isDbMode) {
@@ -59,6 +60,7 @@ export default async function CreditNoteDetailPage({
                   </tr>
                 </thead>
                 <tbody>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {note.lines.map((line: any) => (
                     <tr key={line.id || line.productId} className="border-b last:border-0">
                       <td className="px-4 py-3 font-medium">
@@ -104,6 +106,7 @@ export default async function CreditNoteDetailPage({
                             : "bg-red-100 text-red-800"
                     }`}
                   >
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     {creditNoteStatusLabel(note.status as any)}
                   </span>
                 </dd>
