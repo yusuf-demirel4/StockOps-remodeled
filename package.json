@@ -9,6 +9,7 @@
     "packages/integrations/*"
   ],
   "scripts": {
+    "postinstall": "npm run prisma:generate",
     "dev": "turbo dev --filter=@stockops/web",
     "dev:all": "turbo dev --parallel",
     "dev:web": "turbo dev --filter=@stockops/web",

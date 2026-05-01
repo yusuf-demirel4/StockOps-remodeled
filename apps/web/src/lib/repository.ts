@@ -2813,7 +2813,7 @@ export async function shipOrder(
     });
     const shipmentCode = nextCode("SHP", count);
 
-    let trackingUrl = null;
+    let trackingUrl: string | null = null;
     if (input.trackingNumber) {
       const carrier = input.carrier?.toLowerCase() || "";
       if (carrier === "yurtiçi" || carrier === "yurtici") {
