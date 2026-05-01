@@ -37,6 +37,12 @@ export type PaymentMethod =
   | "CHECK"
   | "OTHER";
 
+export type CreditNoteStatus =
+  | "DRAFT"
+  | "ISSUED"
+  | "APPLIED"
+  | "CANCELLED";
+
 export type SalesOrderStatus =
   | "DRAFT"
   | "CONFIRMED"
@@ -221,6 +227,29 @@ export type Payment = {
   reference?: string;
   paidAt: string;
   createdAt: string;
+};
+
+export type CreditNote = {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  salesReturnId?: string;
+  code: string;
+  status: CreditNoteStatus;
+  totalAmount: number;
+  appliedAmount: number;
+  issuedAt?: string;
+  notes?: string;
+  lines: CreditNoteLine[];
+  createdAt: string;
+};
+
+export type CreditNoteLine = {
+  id?: string;
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
 };
 
 export type StockMovement = {
@@ -587,6 +616,8 @@ export type AppState = {
   salesOrders: SalesOrder[];
   purchaseOrders: PurchaseOrder[];
   invoices: Invoice[];
+  payments?: Payment[];
+  creditNotes?: CreditNote[];
   auditLogs: AuditLog[];
   sessions: Session[];
   apiTokens?: ApiToken[];

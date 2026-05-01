@@ -3,7 +3,7 @@ import {
   StockMovementForm,
   StockTransferForm,
 } from "@/components/inventory-form";
-import { Panel, StatusBadge } from "@/components/ui";
+import { Panel, StatusBadge, subtleButtonClass } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
 import { getAppSnapshot } from "@/lib/repository";
 import {
@@ -13,6 +13,7 @@ import {
   productSku,
   warehouseName,
 } from "@stockops/core/format";
+import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,16 @@ export default async function InventoryPage() {
       title="Stok"
       userName={snapshot.user.name}
     >
+      <div className="flex justify-end mb-4">
+        <a
+          href="/api/export/stock"
+          className={subtleButtonClass}
+          download="stok.csv"
+        >
+          <Download className="size-4" />
+          CSV İndir
+        </a>
+      </div>
       <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
         <div className="grid gap-6">
           <Panel title="Stok hareketi">

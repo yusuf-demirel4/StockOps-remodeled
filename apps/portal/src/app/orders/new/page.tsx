@@ -4,7 +4,7 @@ import { requirePortalAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-const catalogProducts = [
+const fallbackCatalogProducts = [
   { id: "1", sku: "WDG-001", name: "Widget Alpha", tierPrice: 21.5, stock: 150 },
   { id: "2", sku: "WDG-002", name: "Widget Beta", tierPrice: 35.0, stock: 85 },
   { id: "3", sku: "GDG-001", name: "Gadget Pro", tierPrice: 129.99, stock: 30 },
@@ -17,6 +17,41 @@ const catalogProducts = [
 
 export default async function NewOrderPage() {
   const ctx = await requirePortalAuth();
+  const isDbMode = process.env.APP_DATA_SOURCE === "database";
+
+  let catalogProducts = fallbackCatalogProducts;
+
+  if (isDbMode) {
+    const { getPrisma } = await import("@stockops/db/client");
+    const prisma = getPrisma();
+    
+    const [products, tiers, balances] = await Promise.all([
+      prisma.product.findMany({
+        where: { organizationId: ctx.organization.id, isActive: true },
+      }),
+      (prisma as any).customerPriceTier?.findMany({
+        where: { organizationId: ctx.organization.id, customerId: ctx.customer.id },
+      }).catch(() => []) ?? [],
+      prisma.stockBalance.findMany({
+        where: { organizationId: ctx.organization.id },
+      })
+    ]);
+
+    catalogProducts = products.map((p) => {
+      const tier = (tiers as any[]).find((t) => t.productId === p.id);
+      const stock = balances
+        .filter((b) => b.productId === p.id)
+        .reduce((sum, b) => sum + b.onHand, 0);
+        
+      return {
+        id: p.id,
+        sku: p.sku,
+        name: p.name,
+        tierPrice: tier ? Number(tier.tierPrice) : Number(p.unitPrice),
+        stock,
+      };
+    });
+  }
 
   return (
     <PortalShell

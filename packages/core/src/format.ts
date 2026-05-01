@@ -1,4 +1,5 @@
 import type {
+  CreditNoteStatus,
   ManufacturingOrderStatus,
   Product,
   PurchaseOrderStatus,
@@ -9,6 +10,15 @@ import type {
 } from "./types";
 
 export const numberFormatter = new Intl.NumberFormat("tr-TR");
+
+const currencyFormatter = new Intl.NumberFormat("tr-TR", {
+  style: "currency",
+  currency: "TRY",
+});
+
+export function formatCurrency(value: number) {
+  return currencyFormatter.format(value);
+}
 
 const dateFormatter = new Intl.DateTimeFormat("tr-TR", {
   day: "2-digit",
@@ -92,6 +102,17 @@ export function purchaseStatusLabel(status: PurchaseOrderStatus) {
     SENT: "Gönderildi",
     PARTIALLY_RECEIVED: "Kısmi teslim",
     COMPLETED: "Tamamlandı",
+    CANCELLED: "İptal",
+  };
+
+  return labels[status];
+}
+
+export function creditNoteStatusLabel(status: CreditNoteStatus) {
+  const labels: Record<CreditNoteStatus, string> = {
+    DRAFT: "Taslak",
+    ISSUED: "Yayınlandı",
+    APPLIED: "Kullanıldı",
     CANCELLED: "İptal",
   };
 

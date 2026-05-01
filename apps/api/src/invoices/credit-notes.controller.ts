@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Post,
   UseGuards,
@@ -20,10 +21,24 @@ import { ApiTokenSecurity } from "../openapi/decorators";
 
 @ApiTags("Credit Notes")
 @ApiTokenSecurity()
-@Controller("v1/credit-notes")
+@Controller("credit-notes")
 @UseGuards(ApiAuthGuard, PermissionsGuard)
 export class CreditNotesController {
   constructor(private readonly stockOps: StockOpsApiService) {}
+
+  @Get()
+  @RequirePermissions("view_dashboard")
+  @ApiOperation({ summary: "List credit notes." })
+  list(@CurrentAuth() context: AuthContext) {
+    return this.stockOps.listCreditNotes(context);
+  }
+
+  @Get(":id")
+  @RequirePermissions("view_dashboard")
+  @ApiOperation({ summary: "Get a credit note by ID." })
+  findOne(@CurrentAuth() context: AuthContext, @Param("id") id: string) {
+    return this.stockOps.getCreditNote(id, context);
+  }
 
   @Post()
   @RequirePermissions("manage_sales")

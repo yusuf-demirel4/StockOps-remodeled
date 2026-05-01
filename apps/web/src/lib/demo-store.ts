@@ -13,6 +13,8 @@ import {
   productUpdateInputSchema,
   customerInputSchema,
   invoiceInputSchema,
+  creditNoteInputSchema,
+  paymentInputSchema,
   purchaseOrderInputSchema,
   salesOrderInputSchema,
   stockMovementInputSchema,
@@ -42,6 +44,9 @@ import type {
   AuditLog,
   BillOfMaterial,
   BomComponent,
+  CreditNote,
+  InvoiceStatus,
+  PaymentMethod,
   Customer,
   CustomFieldValue,
   ExtensionWebhookSubscription,
@@ -50,6 +55,7 @@ import type {
   ManufacturingOrder,
   Member,
   NotificationDelivery,
+  Payment,
   Product,
   PurchaseOrder,
   Role,
@@ -214,6 +220,27 @@ export function getDemoInvoices(context?: AuthContext) {
     (invoice) => invoice.organizationId === snapshotContext.organization.id,
   );
 }
+
+export function getDemoInvoice(invoiceId: string, context?: AuthContext) {
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization } = snapshotContext;
+
+  const invoice = appState.invoices.find(
+    (inv) => inv.id === invoiceId && inv.organizationId === organization.id,
+  );
+  if (!invoice) return null;
+  
+  const payments = appState.payments?.filter(p => p.invoiceId === invoice.id) || [];
+  const customer = appState.customers.find(c => c.id === invoice.customerId);
+  
+  return {
+    ...invoice,
+    payments,
+    customer,
+  };
+}
+
 
 export function authenticateDemoUser(email: string, password: string) {
   const appState = state();
@@ -927,13 +954,20 @@ export function createSalesOrder(input: unknown, context?: AuthContext) {
     throw new Error("Bu rol satış siparişi oluşturamaz.");
   }
 
+  const orderLines: { productId: string; quantity: number }[] =
+    parsed.lines && parsed.lines.length > 0
+      ? parsed.lines
+      : parsed.productId && parsed.quantity
+        ? [{ productId: parsed.productId, quantity: parsed.quantity }]
+        : [];
+
   const order: SalesOrder = {
     id: id("so"),
     organizationId: organization.id,
     code: code("SO", appState.salesOrders.length),
     customerName: parsed.customerName,
     status: "DRAFT",
-    lines: [{ productId: parsed.productId, quantity: parsed.quantity }],
+    lines: orderLines,
     createdAt: new Date().toISOString(),
   };
 
@@ -1644,6 +1678,151 @@ export function completeManufacturingOrder(moId: string, context?: AuthContext) 
     entityId: mo.id,
     summary: `${mo.code} üretim tamamlandı, mamul stoka eklendi`,
   });
+}
+
+export function recordDemoPayment(
+  invoiceId: string,
+  input: unknown,
+  context?: AuthContext,
+) {
+  const parsed = paymentInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+
+  const invoice = appState.invoices.find((inv) => inv.id === invoiceId && inv.organizationId === organization.id);
+  if (!invoice) {
+    throw new Error("Fatura bulunamadı.");
+  }
+
+  if (!appState.payments) {
+    appState.payments = [];
+  }
+
+  const payment: Payment = {
+    id: id("pay"),
+    organizationId: organization.id,
+    invoiceId: invoice.id,
+    amount: parsed.amount,
+    method: parsed.method as PaymentMethod,
+    reference: parsed.reference,
+    paidAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  };
+
+  appState.payments.push(payment);
+
+  const invoicePayments = appState.payments.filter((p) => p.invoiceId === invoice.id);
+  const totalPaid = invoicePayments.reduce((sum, p) => sum + p.amount, 0);
+
+  if (totalPaid >= invoice.total) {
+    invoice.status = "PAID";
+  } else if (totalPaid > 0) {
+    invoice.status = "PARTIALLY_PAID";
+  }
+
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "CREATE",
+    entityType: "Payment",
+    entityId: payment.id,
+    summary: `${invoice.code} için ödeme alındı: ${parsed.amount}`,
+  });
+
+  return payment;
+}
+
+export function transitionDemoInvoiceStatus(
+  invoiceId: string,
+  targetStatus: string,
+  context?: AuthContext,
+) {
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+
+  const invoice = appState.invoices.find((inv) => inv.id === invoiceId && inv.organizationId === organization.id);
+  if (!invoice) {
+    throw new Error("Fatura bulunamadı.");
+  }
+
+  invoice.status = targetStatus as InvoiceStatus;
+
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "UPDATE",
+    entityType: "Invoice",
+    entityId: invoice.id,
+    summary: `${invoice.code} durumu güncellendi: ${targetStatus}`,
+  });
+
+  return invoice;
+}
+
+export function getDemoCreditNotes(context?: AuthContext) {
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization } = snapshotContext;
+
+  return (appState.creditNotes || []).filter(
+    (note) => note.organizationId === organization.id,
+  );
+}
+
+export function createDemoCreditNote(input: unknown, context?: AuthContext) {
+  const parsed = creditNoteInputSchema.parse(input);
+  const appState = state();
+  const snapshotContext = context ?? getDemoSnapshotContext(appState);
+  const { organization, user } = snapshotContext;
+
+  if (!appState.creditNotes) {
+    appState.creditNotes = [];
+  }
+
+  const count = appState.creditNotes.filter(
+    (n) => n.organizationId === organization.id,
+  ).length;
+
+  const linesWithTotals = parsed.lines.map((line) => {
+    return {
+      ...line,
+      lineTotal: line.quantity * line.unitPrice,
+    };
+  });
+
+  const totalAmount = linesWithTotals.reduce(
+    (sum, line) => sum + line.lineTotal,
+    0,
+  );
+
+  const note: CreditNote = {
+    id: id("cn"),
+    organizationId: organization.id,
+    customerId: parsed.customerId,
+    salesReturnId: parsed.salesReturnId,
+    code: code("CN", count),
+    status: "DRAFT",
+    totalAmount,
+    appliedAmount: 0,
+    notes: parsed.notes,
+    lines: linesWithTotals,
+    createdAt: new Date().toISOString(),
+  };
+
+  appState.creditNotes.unshift(note);
+
+  audit({
+    organizationId: organization.id,
+    actorId: user.id,
+    action: "CREATE",
+    entityType: "CreditNote",
+    entityId: note.id,
+    summary: `${note.code} kredi notu oluşturuldu`,
+  });
+
+  return note;
 }
 
 function getDemoSnapshotContext(appState: AppState): AuthContext {

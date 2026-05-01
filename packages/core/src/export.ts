@@ -81,6 +81,36 @@ export function exportCustomersCSV(customers: Customer[]): string {
   );
 }
 
+export function exportInvoicesCSV(invoices: Invoice[]): string {
+  return toCSV(
+    ["Code", "Customer ID", "Status", "Subtotal", "Tax", "Total", "Currency", "Due Date", "Created"],
+    invoices.map((inv) => [
+      inv.code,
+      inv.customerId,
+      inv.status,
+      inv.subtotal,
+      inv.taxAmount,
+      inv.total,
+      inv.currency,
+      inv.dueDate ?? "",
+      inv.createdAt,
+    ]),
+  );
+}
+
+export function exportOrdersCSV(orders: Array<{ code: string; customerName: string; status: string; createdAt: string; lines: Array<{ productId: string; quantity: number }> }>): string {
+  return toCSV(
+    ["Code", "Customer", "Status", "Line Count", "Created"],
+    orders.map((o) => [
+      o.code,
+      o.customerName,
+      o.status,
+      o.lines.length,
+      o.createdAt,
+    ]),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Excel Export
 // ---------------------------------------------------------------------------

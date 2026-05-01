@@ -26,6 +26,7 @@ import {
   getDemoCustomers,
   getDemoInvoices,
   getDemoSnapshot,
+  getDemoInvoice,
   receivePurchaseOrder as receiveDemoPurchaseOrder,
   recordStocktakeCount as recordDemoStocktakeCount,
   setProductActive as setDemoProductActive,
@@ -38,17 +39,23 @@ import {
   updateWarehouse as updateDemoWarehouse,
   updateWebhookSubscription as updateDemoWebhookSubscription,
   upsertCustomField as upsertDemoCustomField,
+  recordDemoPayment,
+  transitionDemoInvoiceStatus,
+  createDemoCreditNote,
+  getDemoCreditNotes,
 } from "@/lib/demo-store";
 import { getPrisma } from "@/lib/prisma";
 import {
   bomInputSchema,
   bomUpdateInputSchema,
+  creditNoteInputSchema,
   customerInputSchema,
   manufacturingOrderInputSchema,
   customFieldInputSchema,
   exchangeRateQuerySchema,
   invoiceInputSchema,
   organizationSettingsInputSchema,
+  paymentInputSchema,
   productInputSchema,
   productUpdateInputSchema,
   purchaseOrderInputSchema,
@@ -85,6 +92,9 @@ import { hashPassword } from "@stockops/core/password";
 import type {
   AppSnapshot,
   AuthContext,
+  CreditNote,
+  InvoiceStatus,
+  PaymentMethod,
   Customer,
   Invoice,
   Member,
@@ -1581,6 +1591,102 @@ export async function listInvoices(context: AuthContext) {
   return invoices.map(mapInvoice);
 }
 
+export async function listCreditNotes(context: AuthContext) {
+  if (!dbMode()) {
+    return getDemoCreditNotes(context);
+  }
+
+  const creditNotes = await getPrisma().creditNote.findMany({
+    where: { organizationId: context.organization.id },
+    include: { customer: true, lines: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return creditNotes;
+}
+
+export async function createCreditNote(input: unknown, context: AuthContext) {
+  if (!dbMode()) {
+    return createDemoCreditNote(input, context);
+  }
+
+  ensurePermission(context, "manage_sales");
+  const parsed = creditNoteInputSchema.parse(input);
+  const prisma = getPrisma();
+
+  const customer = await prisma.customer.findFirst({
+    where: {
+      id: parsed.customerId,
+      organizationId: context.organization.id,
+      isActive: true,
+    },
+  });
+
+  if (!customer) {
+    throw new Error("Müşteri bulunamadı.");
+  }
+
+  const count = await prisma.creditNote.count({
+    where: { organizationId: context.organization.id },
+  });
+
+  const linesWithTotals = parsed.lines.map((line) => ({
+    ...line,
+    lineTotal: line.quantity * line.unitPrice,
+  }));
+
+  const totalAmount = linesWithTotals.reduce(
+    (sum, line) => sum + line.lineTotal,
+    0,
+  );
+
+  const creditNote = await prisma.creditNote.create({
+    data: {
+      organizationId: context.organization.id,
+      customerId: customer.id,
+      salesReturnId: parsed.salesReturnId || null,
+      code: nextCode("CN", count),
+      status: "DRAFT",
+      totalAmount,
+      appliedAmount: 0,
+      notes: parsed.notes || null,
+      lines: {
+        create: linesWithTotals.map((line) => ({
+          productId: line.productId,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          lineTotal: line.lineTotal,
+        })),
+      },
+    },
+    include: { lines: true, customer: true },
+  });
+
+  await audit(context, "CREATE", "CreditNote", creditNote.id, `${creditNote.code} kredi notu oluşturuldu`);
+  return creditNote;
+}
+
+export async function getInvoice(invoiceId: string, context: AuthContext) {
+  if (!dbMode()) {
+    return getDemoInvoice(invoiceId, context);
+  }
+
+  const invoice = await getPrisma().invoice.findFirst({
+    where: {
+      id: invoiceId,
+      organizationId: context.organization.id,
+    },
+    include: {
+      lines: { include: { product: true } },
+      payments: true,
+      customer: true,
+    },
+  });
+
+  if (!invoice) return null;
+  return invoice;
+}
+
 export async function createInvoice(input: unknown, context: AuthContext) {
   if (!dbMode()) {
     return createDemoInvoice(input, context);
@@ -1661,6 +1767,86 @@ export async function createInvoice(input: unknown, context: AuthContext) {
   return mapInvoice(invoice);
 }
 
+export async function recordPayment(invoiceId: string, input: unknown, context: AuthContext) {
+  if (!dbMode()) {
+    return recordDemoPayment(invoiceId, input, context);
+  }
+
+  ensurePermission(context, "manage_sales");
+  const parsed = paymentInputSchema.parse(input);
+  const prisma = getPrisma();
+
+  await prisma.$transaction(async (tx) => {
+    const invoice = await tx.invoice.findFirst({
+      where: {
+        id: invoiceId,
+        organizationId: context.organization.id,
+      },
+      include: { payments: true },
+    });
+
+    if (!invoice) {
+      throw new Error("Fatura bulunamadı.");
+    }
+
+    const newPayment = await tx.payment.create({
+      data: {
+        organizationId: context.organization.id,
+        invoiceId: invoice.id,
+        amount: parsed.amount,
+        method: parsed.method as PaymentMethod,
+        reference: parsed.reference || null,
+      },
+    });
+
+    const totalPaid = Number(invoice.payments.reduce((sum, p) => sum + Number(p.amount), 0)) + parsed.amount;
+    const invoiceTotal = Number(invoice.total);
+
+    let newStatus = invoice.status;
+    if (totalPaid >= invoiceTotal) {
+      newStatus = "PAID";
+    } else if (totalPaid > 0) {
+      newStatus = "PARTIALLY_PAID";
+    }
+
+    if (newStatus !== invoice.status) {
+      await tx.invoice.update({
+        where: { id: invoice.id },
+        data: { status: newStatus as InvoiceStatus },
+      });
+    }
+
+    await audit(context, "CREATE", "Payment", newPayment.id, `${invoice.code} için ödeme alındı: ${parsed.amount}`);
+  });
+}
+
+export async function transitionInvoiceStatus(invoiceId: string, targetStatus: string, context: AuthContext) {
+  if (!dbMode()) {
+    return transitionDemoInvoiceStatus(invoiceId, targetStatus, context);
+  }
+
+  ensurePermission(context, "manage_sales");
+  const prisma = getPrisma();
+
+  const invoice = await prisma.invoice.findFirst({
+    where: {
+      id: invoiceId,
+      organizationId: context.organization.id,
+    },
+  });
+
+  if (!invoice) {
+    throw new Error("Fatura bulunamadı.");
+  }
+
+  await prisma.invoice.update({
+    where: { id: invoice.id },
+    data: { status: targetStatus as InvoiceStatus },
+  });
+
+  await audit(context, "UPDATE", "Invoice", invoice.id, `${invoice.code} durumu güncellendi: ${targetStatus}`);
+}
+
 export async function createSalesOrder(input: unknown, context: AuthContext) {
   if (!dbMode()) {
     const order = createDemoSalesOrder(input, context);
@@ -1674,13 +1860,20 @@ export async function createSalesOrder(input: unknown, context: AuthContext) {
   const count = await prisma.salesOrder.count({
     where: { organizationId: context.organization.id },
   });
+  const orderLines =
+    parsed.lines && parsed.lines.length > 0
+      ? parsed.lines
+      : parsed.productId && parsed.quantity
+        ? [{ productId: parsed.productId, quantity: parsed.quantity }]
+        : [];
+
   const order = await prisma.salesOrder.create({
     data: {
       organizationId: context.organization.id,
       code: nextCode("SO", count),
       customerName: parsed.customerName,
       lines: {
-        create: [{ productId: parsed.productId, quantity: parsed.quantity }],
+        create: orderLines,
       },
     },
   });
@@ -1697,7 +1890,7 @@ export async function createSalesOrder(input: unknown, context: AuthContext) {
     id: order.id,
     code: order.code,
     customerName: order.customerName,
-    lines: [{ productId: parsed.productId, quantity: parsed.quantity }],
+    lines: orderLines,
   });
   return order;
 }
@@ -2961,3 +3154,201 @@ export async function generateSmartPurchaseOrders(
   });
 }
 
+// ── Müşteri Detay ──
+
+export async function getCustomer(customerId: string, context: AuthContext) {
+  if (!dbMode()) {
+    const { getDemoCustomers } = await import("@/lib/demo-store");
+    const customers = getDemoCustomers(context);
+    const customer = customers.find((c) => c.id === customerId);
+    if (!customer) return null;
+    // Demo modda ilişkili veriyi state'den çek
+    const { default: demoStore } = await import("@/lib/demo-store") as any;
+    return { customer, orders: [], invoices: [], priceTiers: [] };
+  }
+
+  const prisma = getPrisma();
+  const customer = await prisma.customer.findFirst({
+    where: { id: customerId, organizationId: context.organization.id },
+  });
+  if (!customer) return null;
+
+  const [orders, invoices, priceTiers] = await Promise.all([
+    prisma.salesOrder.findMany({
+      where: { customerId, organizationId: context.organization.id },
+      include: { lines: true },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    prisma.invoice.findMany({
+      where: { customerId, organizationId: context.organization.id },
+      include: { payments: true },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    (prisma as any).customerPriceTier?.findMany?.({
+      where: { customerId, organizationId: context.organization.id },
+      include: { product: true },
+      orderBy: { createdAt: "desc" },
+    }).catch(() => []) ?? Promise.resolve([]),
+  ]);
+
+  return {
+    customer: mapCustomer(customer),
+    orders,
+    invoices,
+    priceTiers,
+  };
+}
+
+// ── Müşteri Fiyat Katmanları ──
+
+export async function listCustomerPriceTiers(customerId: string, context: AuthContext) {
+  if (!dbMode()) {
+    // Demo modda CustomerPriceTier henüz demo state'de yok — boş döndür
+    return [] as any[];
+  }
+
+  const rows = await (getPrisma() as any).customerPriceTier?.findMany?.({
+    where: { customerId, organizationId: context.organization.id },
+    include: { product: true },
+    orderBy: { createdAt: "desc" },
+  }).catch(() => []) ?? [];
+
+  return rows;
+}
+
+export async function upsertCustomerPriceTier(input: unknown, context: AuthContext) {
+  if (!dbMode()) {
+    // Demo mod — in-memory CustomerPriceTier desteği yok; sessizce geç
+    return;
+  }
+
+  ensurePermission(context, "manage_sales");
+  const { customerPriceTierInputSchema } = await import("@stockops/core/schemas");
+  const parsed = customerPriceTierInputSchema.parse(input);
+  const prisma = getPrisma() as any;
+
+  const existing = await prisma.customerPriceTier?.findFirst?.({
+    where: {
+      customerId: parsed.customerId,
+      productId: parsed.productId,
+      organizationId: context.organization.id,
+    },
+  });
+
+  if (existing) {
+    await prisma.customerPriceTier?.update?.({
+      where: { id: existing.id },
+      data: { tierPrice: parsed.tierPrice, minQuantity: parsed.minQuantity },
+    });
+  } else {
+    await prisma.customerPriceTier?.create?.({
+      data: {
+        organizationId: context.organization.id,
+        customerId: parsed.customerId,
+        productId: parsed.productId,
+        tierPrice: parsed.tierPrice,
+        minQuantity: parsed.minQuantity,
+      },
+    });
+  }
+
+  await audit(context, "UPDATE", "CustomerPriceTier", parsed.customerId, `Müşteri fiyat katmanı güncellendi`);
+}
+
+export async function deleteCustomerPriceTier(tierId: string, context: AuthContext) {
+  if (!dbMode()) return;
+  ensurePermission(context, "manage_sales");
+  const prisma = getPrisma() as any;
+
+  const tier = await prisma.customerPriceTier?.findFirst?.({
+    where: { id: tierId, organizationId: context.organization.id },
+  });
+  if (!tier) throw new Error("Fiyat katmanı bulunamadı.");
+
+  await prisma.customerPriceTier?.delete?.({ where: { id: tierId } });
+  await audit(context, "UPDATE", "CustomerPriceTier", tierId, `Fiyat katmanı silindi`);
+}
+
+// ── CSV Export Yardımcıları ──
+
+export async function exportProductsCsv(context: AuthContext) {
+  const products = await listProducts(context);
+  const rows = products.map((p) => [
+    p.sku, p.name, p.category, p.unitPrice ?? 0, p.costPrice ?? 0,
+    p.minimumStock, p.isActive ? "Aktif" : "Pasif",
+  ]);
+  return buildCsv(["SKU", "İsim", "Kategori", "Liste Fiyatı", "Maliyet", "Min. Stok", "Durum"], rows);
+}
+
+export async function exportOrdersCsv(context: AuthContext) {
+  const orders = !dbMode()
+    ? (await import("@/lib/demo-store")).getDemoSnapshot(context).salesOrders
+    : await getPrisma().salesOrder.findMany({
+        where: { organizationId: context.organization.id },
+        orderBy: { createdAt: "desc" },
+      });
+  const rows = (orders as any[]).map((o) => [
+    o.code, o.customerName ?? o.customerId ?? "", o.status,
+    new Date(o.createdAt).toLocaleDateString("tr-TR"),
+  ]);
+  return buildCsv(["Kod", "Müşteri", "Durum", "Tarih"], rows);
+}
+
+export async function exportInvoicesCsv(context: AuthContext) {
+  const invoices = await listInvoices(context);
+  const rows = invoices.map((inv) => [
+    inv.code, inv.customerId, inv.status, inv.total, inv.currency,
+    new Date(inv.createdAt).toLocaleDateString("tr-TR"),
+  ]);
+  return buildCsv(["Kod", "Müşteri ID", "Durum", "Toplam", "Para Birimi", "Tarih"], rows);
+}
+
+export async function exportCustomersCsv(context: AuthContext) {
+  const customers = await listCustomers(context);
+  const rows = customers.map((c) => [
+    c.code, c.name, c.email ?? "", c.phone ?? "", c.paymentTermDays,
+    c.isActive ? "Aktif" : "Pasif",
+  ]);
+  return buildCsv(["Kod", "İsim", "E-posta", "Telefon", "Vade (Gün)", "Durum"], rows);
+}
+
+export async function exportStockCsv(context: AuthContext) {
+  const snapshot = await getAppSnapshot(context);
+  const rows = snapshot.stockRows.map((row) => [
+    row.product.sku, row.product.name, row.warehouse.name,
+    row.onHand, row.minimumStock, row.isCritical ? "Kritik" : "Normal",
+  ]);
+  return buildCsv(["SKU", "Ürün", "Depo", "Eldeki", "Min. Stok", "Durum"], rows);
+}
+
+function buildCsv(headers: string[], rows: (string | number | boolean)[][]) {
+  const BOM = "\uFEFF";
+  const escape = (v: string | number | boolean) => {
+    const s = String(v ?? "");
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+  const lines = [headers.map(escape).join(",")];
+  for (const row of rows) {
+    lines.push(row.map(escape).join(","));
+  }
+  return BOM + lines.join("\r\n");
+}
+
+
+export async function listProducts(context: AuthContext) {
+  if (!dbMode()) {
+    const snapshot = await getDemoSnapshot(context);
+    return snapshot.products;
+  }
+  const prisma = getPrisma();
+  const products = await prisma.product.findMany({
+    where: { organizationId: context.organization.id },
+    orderBy: { name: "asc" },
+  });
+  return products.map(mapProduct);
+}

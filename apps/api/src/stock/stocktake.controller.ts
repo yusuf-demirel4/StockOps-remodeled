@@ -11,13 +11,13 @@ import { ApiTokenSecurity } from "../openapi/decorators";
 
 @ApiTags("Stocktakes (Cycle Counts)")
 @ApiTokenSecurity()
-@Controller("v1/stocktakes")
+@Controller("stocktakes")
 @UseGuards(ApiAuthGuard, PermissionsGuard)
 export class StocktakeController {
   constructor(private readonly stockOps: StockOpsApiService) {}
 
   @Post()
-  @RequirePermissions("manage_inventory")
+  @RequirePermissions("manage_stock")
   @ApiOperation({ summary: "Create a new cycle count." })
   createStocktake(
     @Body() body: { warehouseId: string; assignedToId?: string },
@@ -27,7 +27,7 @@ export class StocktakeController {
   }
 
   @Post(":id/items")
-  @RequirePermissions("manage_inventory")
+  @RequirePermissions("manage_stock")
   @ApiOperation({ summary: "Add an item to the cycle count." })
   addStocktakeItem(
     @Param("id") stocktakeId: string,
@@ -38,7 +38,7 @@ export class StocktakeController {
   }
 
   @Patch(":id/items/:itemId/count")
-  @RequirePermissions("manage_inventory")
+  @RequirePermissions("manage_stock")
   @ApiOperation({ summary: "Submit counted quantity for an item." })
   submitCount(
     @Param("id") stocktakeId: string,
@@ -50,7 +50,7 @@ export class StocktakeController {
   }
 
   @Patch(":id/complete")
-  @RequirePermissions("manage_inventory")
+  @RequirePermissions("manage_stock")
   @ApiOperation({ summary: "Mark count as complete, ready for review." })
   completeStocktake(
     @Param("id") stocktakeId: string,
@@ -60,7 +60,7 @@ export class StocktakeController {
   }
 
   @Patch(":id/approve")
-  @RequirePermissions("manage_inventory")
+  @RequirePermissions("manage_stock")
   @ApiOperation({ summary: "Approve variance and adjust stock." })
   approveVariance(
     @Param("id") stocktakeId: string,

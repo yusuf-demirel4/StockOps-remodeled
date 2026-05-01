@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { Panel, buttonClass } from "@/components/ui";
+import { Panel, buttonClass, subtleButtonClass } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
 import { getAppSnapshot, listInvoices } from "@/lib/repository";
 import { crossRate } from "@stockops/core/currency";
 import type { Invoice } from "@stockops/core/types";
+import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,15 @@ export default async function InvoicesPage() {
       userName={context.user.name}
     >
       <div className="grid gap-6">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <a
+            href="/api/export/invoices"
+            className={subtleButtonClass}
+            download="faturalar.csv"
+          >
+            <Download className="size-4" />
+            CSV İndir
+          </a>
           <Link className={buttonClass} href="/invoices/new">
             Yeni Fatura
           </Link>
@@ -56,7 +65,11 @@ export default async function InvoicesPage() {
                       className="border-b border-[var(--border-table)] align-top last:border-0"
                       key={invoice.id}
                     >
-                      <td className="py-3 pr-3 font-medium">{invoice.code}</td>
+                      <td className="py-3 pr-3 font-medium">
+                        <Link href={`/invoices/${invoice.id}`} className="text-[var(--accent-primary)] hover:underline">
+                          {invoice.code}
+                        </Link>
+                      </td>
                       <td className="py-3 pr-3">{new Date(invoice.createdAt).toLocaleDateString(locale)}</td>
                       <td className="py-3 pr-3">
                         <span className="rounded bg-[var(--bg-hover-nav)] px-2 py-1 text-xs font-medium text-[var(--text-nav)]">

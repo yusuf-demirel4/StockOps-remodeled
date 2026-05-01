@@ -5,8 +5,7 @@ import { ShoppingCart } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-// Demo product catalog with customer-specific pricing
-const demoProducts = [
+const fallbackDemoProducts = [
   { id: "1", sku: "WDG-001", name: "Widget Alpha", category: "Widgets", price: 24.99, tierPrice: 21.50, stock: 150 },
   { id: "2", sku: "WDG-002", name: "Widget Beta", category: "Widgets", price: 39.99, tierPrice: 35.00, stock: 85 },
   { id: "3", sku: "GDG-001", name: "Gadget Pro", category: "Gadgets", price: 149.99, tierPrice: 129.99, stock: 30 },
@@ -21,6 +20,44 @@ const fmt = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" 
 
 export default async function CatalogPage() {
   const ctx = await requirePortalAuth();
+  const isDbMode = process.env.APP_DATA_SOURCE === "database";
+  
+  let catalogProducts = fallbackDemoProducts;
+
+  if (isDbMode) {
+    const { getPrisma } = await import("@stockops/db/client");
+    const prisma = getPrisma();
+    
+    // Aktif ürünleri, müşteriye özel fiyatları ve toplam stokları getir
+    const [products, tiers, balances] = await Promise.all([
+      prisma.product.findMany({
+        where: { organizationId: ctx.organization.id, isActive: true },
+      }),
+      (prisma as any).customerPriceTier?.findMany({
+        where: { organizationId: ctx.organization.id, customerId: ctx.customer.id },
+      }).catch(() => []) ?? [],
+      prisma.stockBalance.findMany({
+        where: { organizationId: ctx.organization.id },
+      })
+    ]);
+
+    catalogProducts = products.map((p) => {
+      const tier = (tiers as any[]).find((t) => t.productId === p.id);
+      const stock = balances
+        .filter((b) => b.productId === p.id)
+        .reduce((sum, b) => sum + b.onHand, 0);
+        
+      return {
+        id: p.id,
+        sku: p.sku,
+        name: p.name,
+        category: p.category,
+        price: Number(p.unitPrice),
+        tierPrice: tier ? Number(tier.tierPrice) : Number(p.unitPrice),
+        stock,
+      };
+    });
+  }
 
   return (
     <PortalShell
@@ -29,7 +66,7 @@ export default async function CatalogPage() {
       customerName={ctx.customerUser.name}
       organizationName={ctx.organization.name}
     >
-      <Panel title={`Ürünler (${demoProducts.length})`}>
+      <Panel title={`Ürünler (${catalogProducts.length})`}>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-xs uppercase text-[var(--text-secondary)]">
@@ -44,7 +81,7 @@ export default async function CatalogPage() {
               </tr>
             </thead>
             <tbody>
-              {demoProducts.map((product) => (
+              {catalogProducts.map((product) => (
                 <tr
                   key={product.id}
                   className="border-b border-[var(--border-table)] last:border-0"

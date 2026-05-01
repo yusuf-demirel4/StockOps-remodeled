@@ -839,3 +839,96 @@ export async function generateSmartPurchaseOrdersAction(
   }
 }
 
+export async function recordPaymentAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Ödeme kaydedildi.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.recordPayment(
+        value(formData, "invoiceId"),
+        {
+          invoiceId: value(formData, "invoiceId"),
+          amount: parseFloat(value(formData, "amount") || "0"),
+          method: value(formData, "method"),
+          reference: value(formData, "reference"),
+        },
+        context,
+      )
+    )
+  );
+}
+
+export async function transitionInvoiceStatusAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Fatura durumu güncellendi.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.transitionInvoiceStatus(
+        value(formData, "invoiceId"),
+        value(formData, "targetStatus"),
+        context,
+      )
+    )
+  );
+}
+
+export async function createCreditNoteAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  const productIds = formData.getAll("productId") as string[];
+  const quantities = formData.getAll("quantity") as string[];
+  const unitPrices = formData.getAll("unitPrice") as string[];
+
+  const lines = productIds.map((productId, i) => ({
+    productId,
+    quantity: parseInt(quantities[i] || "0", 10),
+    unitPrice: parseFloat(unitPrices[i] || "0"),
+  })).filter((line) => line.quantity > 0 && line.unitPrice >= 0);
+
+  return runMutation("Kredi notu oluşturuldu.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.createCreditNote(
+        {
+          customerId: value(formData, "customerId"),
+          salesReturnId: value(formData, "salesReturnId") || undefined,
+          notes: value(formData, "notes"),
+          lines,
+        },
+        context,
+      )
+    )
+  );
+}
+
+export async function upsertCustomerPriceTierAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Fiyat katmani kaydedildi.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.upsertCustomerPriceTier(
+        {
+          customerId: value(formData, "customerId"),
+          productId: value(formData, "productId"),
+          tierPrice: parseFloat(value(formData, "tierPrice") || "0"),
+          minQuantity: parseInt(value(formData, "minQuantity") || "1", 10),
+        },
+        context,
+      )
+    )
+  );
+}
+
+export async function deleteCustomerPriceTierAction(
+  _previousState: ActionState,
+  formData: FormData,
+) {
+  return runMutation("Fiyat katmani silindi.", (context) =>
+    import("@/lib/repository").then((m) =>
+      m.deleteCustomerPriceTier(value(formData, "tierId"), context)
+    )
+  );
+}

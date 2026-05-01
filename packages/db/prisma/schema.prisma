@@ -582,6 +582,9 @@ model SalesOrderLine {
   salesOrderId String
   productId    String
   quantity     Int
+  pickedQty    Int        @default(0)
+  packedQty    Int        @default(0)
+  shippedQty   Int        @default(0)
   unitPrice    Decimal    @default(0) @db.Decimal(12, 2)
   discount     Decimal    @default(0) @db.Decimal(5, 2)
   lineTotal    Decimal    @default(0) @db.Decimal(12, 2)

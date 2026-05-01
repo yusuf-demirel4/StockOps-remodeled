@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { createInitialState } from "@stockops/core/demo-data";
 import {
@@ -1637,6 +1638,41 @@ export class StockOpsApiService {
     return customer;
   }
 
+  async listCustomerPriceTiers(customerId: string, context: AuthContext) {
+    if (!dbMode()) return [];
+    const prisma = getPrisma();
+    const tiers = await prisma.customerPriceTier.findMany({
+      where: { customerId, organizationId: context.organization.id },
+      include: { product: { select: { id: true, sku: true, name: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    return tiers.map((t: any) => ({
+      ...t,
+      tierPrice: Number(t.tierPrice),
+    }));
+  }
+
+  async createCustomerPriceTier(customerId: string, input: { productId: string; tierPrice: number; minQuantity?: number }, context: AuthContext) {
+    if (!dbMode()) throw new Error("Price tiers require database mode.");
+    const prisma = getPrisma();
+
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, organizationId: context.organization.id },
+    });
+    if (!customer) throw new NotFoundException("Customer not found.");
+
+    const tier = await prisma.customerPriceTier.create({
+      data: {
+        organizationId: context.organization.id,
+        customerId,
+        productId: input.productId,
+        tierPrice: input.tierPrice,
+        minQuantity: input.minQuantity ?? 1,
+      },
+    });
+    return { ...tier, tierPrice: Number(tier.tierPrice) };
+  }
+
   async listInvoices(context: AuthContext, query?: any) {
     if (dbMode()) {
       const prisma = getPrisma();
@@ -1776,49 +1812,125 @@ export class StockOpsApiService {
   }
 
   async recordPayment(invoiceId: string, amount: number, method: any, reference: string | undefined, context: AuthContext) {
-    if (!dbMode()) throw new BadRequestException("Payments require database mode.");
-    const prisma = getPrisma();
+    if (dbMode()) {
+      const prisma = getPrisma();
 
-    return await prisma.$transaction(async (tx: any) => {
-      const invoice = await tx.invoice.findFirst({
-        where: { id: invoiceId, organizationId: context.organization.id },
-        include: { payments: true }
-      });
-      if (!invoice) throw new NotFoundException("Invoice not found.");
-
-      const payment = await tx.payment.create({
-        data: {
-          organizationId: context.organization.id,
-          invoiceId: invoice.id,
-          amount,
-          method,
-          reference: reference || null,
-        }
-      });
-
-      const totalPaid = invoice.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0) + amount;
-      const totalInvoiceAmount = Number(invoice.total);
-      
-      let newStatus = invoice.status;
-      if (totalPaid >= totalInvoiceAmount) newStatus = "PAID";
-      else if (totalPaid > 0) newStatus = "PARTIALLY_PAID";
-
-      if (newStatus !== invoice.status) {
-        await tx.invoice.update({
-          where: { id: invoice.id },
-          data: { status: newStatus as any }
+      return await prisma.$transaction(async (tx: any) => {
+        const invoice = await tx.invoice.findFirst({
+          where: { id: invoiceId, organizationId: context.organization.id },
+          include: { payments: true }
         });
-      }
+        if (!invoice) throw new NotFoundException("Invoice not found.");
 
-      await this.audit(context, "CREATE" as any, "Payment", payment.id, `Payment of ${amount} for invoice ${invoice.code}`);
-      return payment;
-    });
+        const payment = await tx.payment.create({
+          data: {
+            organizationId: context.organization.id,
+            invoiceId: invoice.id,
+            amount,
+            method,
+            reference: reference || null,
+          }
+        });
+
+        const totalPaid = invoice.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0) + amount;
+        const totalInvoiceAmount = Number(invoice.total);
+        
+        let newStatus = invoice.status;
+        if (totalPaid >= totalInvoiceAmount) newStatus = "PAID";
+        else if (totalPaid > 0) newStatus = "PARTIALLY_PAID";
+
+        if (newStatus !== invoice.status) {
+          await tx.invoice.update({
+            where: { id: invoice.id },
+            data: { status: newStatus as any }
+          });
+        }
+
+        await this.audit(context, "CREATE" as any, "Payment", payment.id, `Payment of ${amount} for invoice ${invoice.code}`);
+        return payment;
+      });
+    }
+
+    const state = demoState();
+    const invoice = state.invoices.find((i) => i.id === invoiceId && i.organizationId === context.organization.id) as any;
+    if (!invoice) throw new NotFoundException("Invoice not found.");
+
+    if (!invoice.payments) invoice.payments = [];
+    const payment = {
+      id: id("pay"),
+      organizationId: context.organization.id,
+      invoiceId: invoice.id,
+      amount,
+      method,
+      reference,
+      createdAt: new Date().toISOString()
+    };
+    invoice.payments.push(payment);
+
+    const totalPaid = invoice.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+    const totalInvoiceAmount = Number(invoice.total);
+    
+    let newStatus = invoice.status;
+    if (totalPaid >= totalInvoiceAmount) newStatus = "PAID";
+    else if (totalPaid > 0) newStatus = "PARTIALLY_PAID";
+    invoice.status = newStatus;
+
+    return payment;
+  }
+
+  async listCreditNotes(context: AuthContext) {
+    if (dbMode()) {
+      const prisma = getPrisma();
+      const creditNotes = await prisma.creditNote.findMany({
+        where: { organizationId: context.organization.id },
+        include: { customer: true, lines: true },
+        orderBy: { createdAt: "desc" },
+      });
+      return creditNotes.map((cn: any) => ({
+        ...cn,
+        totalAmount: Number(cn.totalAmount),
+        appliedAmount: Number(cn.appliedAmount),
+        issuedAt: cn.issuedAt?.toISOString(),
+        createdAt: cn.createdAt.toISOString(),
+        lines: cn.lines.map((l: any) => ({
+          ...l,
+          unitPrice: Number(l.unitPrice),
+          lineTotal: Number(l.lineTotal),
+        })),
+      }));
+    }
+    const state = demoState() as any;
+    return (state.creditNotes || []).filter((cn: any) => cn.organizationId === context.organization.id);
+  }
+
+  async getCreditNote(creditNoteId: string, context: AuthContext) {
+    if (dbMode()) {
+      const prisma = getPrisma();
+      const creditNote = await prisma.creditNote.findFirst({
+        where: { id: creditNoteId, organizationId: context.organization.id },
+        include: { customer: true, lines: { include: { product: true } } },
+      });
+      if (!creditNote) throw new NotFoundException("Credit note not found.");
+      return {
+        ...creditNote,
+        totalAmount: Number(creditNote.totalAmount),
+        appliedAmount: Number(creditNote.appliedAmount),
+        issuedAt: creditNote.issuedAt?.toISOString(),
+        createdAt: creditNote.createdAt.toISOString(),
+        lines: creditNote.lines.map((l: any) => ({
+          ...l,
+          unitPrice: Number(l.unitPrice),
+          lineTotal: Number(l.lineTotal),
+        })),
+      };
+    }
+    const state = demoState() as any;
+    const cn = (state.creditNotes || []).find((c: any) => c.id === creditNoteId && c.organizationId === context.organization.id);
+    if (!cn) throw new NotFoundException("Credit note not found.");
+    return cn;
   }
 
   async createCreditNote(customerId: string, salesReturnId: string | undefined, lines: any[], notes: string | undefined, context: AuthContext) {
-    if (!dbMode()) throw new BadRequestException("Credit Notes require database mode.");
-    const prisma = getPrisma();
-
     let totalAmount = 0;
     const lineData = lines.map(l => {
       const lineTotal = l.quantity * l.unitPrice;
@@ -1826,34 +1938,59 @@ export class StockOpsApiService {
       return { ...l, lineTotal };
     });
 
-    const count = await prisma.creditNote.count({
-      where: { organizationId: context.organization.id },
-    });
+    if (dbMode()) {
+      const prisma = getPrisma();
 
-    const creditNote = await prisma.creditNote.create({
-      data: {
-        organizationId: context.organization.id,
-        customerId,
-        salesReturnId: salesReturnId || null,
-        code: nextCode("CN", count),
-        status: "ISSUED",
-        totalAmount,
-        appliedAmount: 0,
-        notes: notes || null,
-        issuedAt: new Date(),
-        lines: {
-          create: lineData.map(l => ({
-            productId: l.productId,
-            quantity: l.quantity,
-            unitPrice: l.unitPrice,
-            lineTotal: l.lineTotal,
-          }))
-        }
-      },
-      include: { lines: true }
-    });
+      const count = await prisma.creditNote.count({
+        where: { organizationId: context.organization.id },
+      });
 
-    await this.audit(context, "CREATE" as any, "CreditNote", creditNote.id, `Credit note ${creditNote.code}`);
+      const creditNote = await prisma.creditNote.create({
+        data: {
+          organizationId: context.organization.id,
+          customerId,
+          salesReturnId: salesReturnId || null,
+          code: nextCode("CN", count),
+          status: "ISSUED",
+          totalAmount,
+          appliedAmount: 0,
+          notes: notes || null,
+          issuedAt: new Date(),
+          lines: {
+            create: lineData.map(l => ({
+              productId: l.productId,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              lineTotal: l.lineTotal,
+            }))
+          }
+        },
+        include: { lines: true }
+      });
+
+      await this.audit(context, "CREATE" as any, "CreditNote", creditNote.id, `Credit note ${creditNote.code}`);
+      return creditNote;
+    }
+
+    const state = demoState() as any;
+    if (!state.creditNotes) state.creditNotes = [];
+
+    const creditNote = {
+      id: id("cn"),
+      organizationId: context.organization.id,
+      customerId,
+      salesReturnId,
+      code: nextCode("CN", state.creditNotes.length),
+      status: "ISSUED",
+      totalAmount,
+      appliedAmount: 0,
+      notes,
+      issuedAt: new Date().toISOString(),
+      lines: lineData,
+      createdAt: new Date().toISOString(),
+    };
+
+    state.creditNotes.unshift(creditNote);
     return creditNote;
   }
 
@@ -3267,6 +3404,122 @@ export class StockOpsApiService {
     if (!warehouse) {
       throw new NotFoundException("Warehouse not found.");
     }
+  }
+
+  // ── B2B Portal ──
+
+  async portalLogin(email: string, password: string) {
+    if (dbMode()) {
+      const prisma = getPrisma();
+      const customerUser = await prisma.customerUser.findUnique({
+        where: { email },
+        include: { customer: { include: { organization: true } } },
+      });
+      if (!customerUser || !customerUser.isActive) {
+        throw new UnauthorizedException("Invalid credentials.");
+      }
+      const { verifyPassword } = await import("@stockops/core/password");
+      const valid = verifyPassword(password, customerUser.passwordHash);
+      if (!valid) throw new UnauthorizedException("Invalid credentials.");
+
+      const token = `portal_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
+      const { createHash } = await import("node:crypto");
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+
+      await prisma.customerSession.create({
+        data: {
+          customerUserId: customerUser.id,
+          tokenHash,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+      return { token, customerUser: { id: customerUser.id, name: customerUser.name, email: customerUser.email, customerId: customerUser.customerId } };
+    }
+    throw new UnauthorizedException("Portal login is only supported in database mode.");
+  }
+
+  async requirePortalAuth(req: any) {
+    const authHeader = req.headers?.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      throw new UnauthorizedException("Portal authentication required.");
+    }
+    const token = authHeader.slice(7);
+    if (!dbMode()) throw new UnauthorizedException("Portal requires database mode.");
+
+    const prisma = getPrisma();
+    const { createHash } = await import("node:crypto");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const session = await prisma.customerSession.findUnique({
+      where: { tokenHash },
+      include: { customerUser: { include: { customer: { include: { organization: true } } } } },
+    });
+    if (!session || session.expiresAt < new Date() || !session.customerUser.isActive) {
+      throw new UnauthorizedException("Invalid or expired portal session.");
+    }
+    return {
+      customerUser: session.customerUser,
+      customer: session.customerUser.customer,
+      organization: session.customerUser.customer.organization,
+    };
+  }
+
+  async portalCatalog(portalContext: any) {
+    const prisma = getPrisma();
+    const products = await prisma.product.findMany({
+      where: { organizationId: portalContext.organization.id, isActive: true },
+      select: { id: true, sku: true, name: true, category: true, unitPrice: true, description: true },
+      orderBy: { name: "asc" },
+    });
+
+    const priceTiers = await prisma.customerPriceTier.findMany({
+      where: { customerId: portalContext.customer.id },
+    });
+    const tierMap = new Map<string, Array<{ minQuantity: number; tierPrice: number }>>();
+    for (const tier of priceTiers) {
+      const existing = tierMap.get(tier.productId) ?? [];
+      existing.push({ minQuantity: tier.minQuantity, tierPrice: Number(tier.tierPrice) });
+      tierMap.set(tier.productId, existing);
+    }
+
+    return products.map((p: any) => ({
+      ...p,
+      unitPrice: Number(p.unitPrice),
+      priceTiers: tierMap.get(p.id) ?? [],
+    }));
+  }
+
+  async portalPlaceOrder(lines: Array<{ productId: string; quantity: number }>, notes: string | undefined, portalContext: any) {
+    const prisma = getPrisma();
+    const count = await prisma.salesOrder.count({
+      where: { organizationId: portalContext.organization.id },
+    });
+
+    const order = await prisma.salesOrder.create({
+      data: {
+        organizationId: portalContext.organization.id,
+        code: nextCode("SO", count),
+        customerId: portalContext.customer.id,
+        customerName: portalContext.customer.name,
+        lines: { create: lines },
+      },
+      include: { lines: true },
+    });
+
+    return { id: order.id, code: order.code, status: order.status, lines: order.lines };
+  }
+
+  async portalListOrders(portalContext: any) {
+    const prisma = getPrisma();
+    const orders = await prisma.salesOrder.findMany({
+      where: {
+        organizationId: portalContext.organization.id,
+        customerId: portalContext.customer.id,
+      },
+      include: { lines: true },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    return orders;
   }
 
   private async audit(

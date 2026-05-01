@@ -83,7 +83,7 @@ export class PurchaseOrdersController {
   @ApiOperation({ summary: "Receive a purchase order and increase stock." })
   @ApiParam({ name: "id", example: "po_001" })
   @ApiOkResponse({ schema: purchaseOrderSchema })
-  receive(@CurrentAuth() context: AuthContext, @Param("id") id: string, @Body() body: any) {
-    return this.stockOps.receivePurchaseOrder(id, context, body);
+  receive(@CurrentAuth() context: AuthContext, @Param("id") id: string) {
+    return this.stockOps.receivePurchaseOrder(id, context);
   }
 }

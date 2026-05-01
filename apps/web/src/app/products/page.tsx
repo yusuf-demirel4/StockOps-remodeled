@@ -4,11 +4,12 @@ import {
   ProductStatusForm,
   ProductUpdateDisclosure,
 } from "@/components/product-forms";
-import { Panel, StatusBadge } from "@/components/ui";
+import { Panel, StatusBadge, subtleButtonClass } from "@/components/ui";
 import { VariantManager } from "@/components/variant-forms";
 import { requireAuth } from "@/lib/auth";
 import { getAppSnapshot } from "@/lib/repository";
 import { numberFormatter } from "@stockops/core/format";
+import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,16 @@ export default async function ProductsPage() {
       title="Ürünler"
       userName={snapshot.user.name}
     >
+      <div className="flex justify-end mb-2">
+        <a
+          href="/api/export/products"
+          className={subtleButtonClass}
+          download="urunler.csv"
+        >
+          <Download className="size-4" />
+          CSV İndir
+        </a>
+      </div>
       <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
         <Panel title="Yeni ürün">
           <ProductCreateForm />

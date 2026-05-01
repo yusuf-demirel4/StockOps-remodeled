@@ -13,6 +13,8 @@ import {
   exportStockCSV,
   exportMovementsCSV,
   exportCustomersCSV,
+  exportInvoicesCSV,
+  exportOrdersCSV,
   exportProductsExcel,
   exportStockExcel,
   generateInvoicePDF,
@@ -57,7 +59,7 @@ export class ExportsController {
   @ApiOkResponse({ description: "CSV file" })
   async stockCSV(@CurrentAuth() ctx: AuthContext, @Res() res: Response) {
     const result = await this.stockOps.listStockRows(ctx, { limit: 200 });
-    const csv = exportStockCSV(result.data);
+    const csv = exportStockCSV(result as any);
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="stock.csv"');
     res.send(csv);
@@ -80,10 +82,37 @@ export class ExportsController {
   @ApiOperation({ summary: "Export customers as CSV." })
   @ApiOkResponse({ description: "CSV file" })
   async customersCSV(@CurrentAuth() ctx: AuthContext, @Res() res: Response) {
-    const customers = await this.stockOps.listCustomers(ctx) as any[];
+    const result = await this.stockOps.listCustomers(ctx);
+    const customers = (Array.isArray(result) ? result : (result as any).data) as any[];
     const csv = exportCustomersCSV(customers);
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="customers.csv"');
+    res.send(csv);
+  }
+
+  @Get("invoices.csv")
+  @RequirePermissions("view_dashboard")
+  @ApiOperation({ summary: "Export invoices as CSV." })
+  @ApiOkResponse({ description: "CSV file" })
+  async invoicesCSV(@CurrentAuth() ctx: AuthContext, @Res() res: Response) {
+    const result = await this.stockOps.listInvoices(ctx);
+    const invoices = Array.isArray(result) ? result : (result as any).data;
+    const csv = exportInvoicesCSV(invoices);
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="invoices.csv"');
+    res.send(csv);
+  }
+
+  @Get("orders.csv")
+  @RequirePermissions("view_dashboard")
+  @ApiOperation({ summary: "Export sales orders as CSV." })
+  @ApiOkResponse({ description: "CSV file" })
+  async ordersCSV(@CurrentAuth() ctx: AuthContext, @Res() res: Response) {
+    const result = await this.stockOps.listSalesOrders(ctx);
+    const orders = (Array.isArray(result) ? result : (result as any).data) as any[];
+    const csv = exportOrdersCSV(orders);
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="orders.csv"');
     res.send(csv);
   }
 
@@ -108,7 +137,7 @@ export class ExportsController {
   @ApiOkResponse({ description: "XLSX file" })
   async stockExcel(@CurrentAuth() ctx: AuthContext, @Res() res: Response) {
     const result = await this.stockOps.listStockRows(ctx, { limit: 200 });
-    const buffer = await exportStockExcel(result.data);
+    const buffer = await exportStockExcel(result as any);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", 'attachment; filename="stock.xlsx"');
     res.send(buffer);
@@ -126,14 +155,16 @@ export class ExportsController {
     @Param("id") invoiceId: string,
     @Res() res: Response,
   ) {
-    const invoices = await this.stockOps.listInvoices(ctx) as any[];
+    const invoicesResult = await this.stockOps.listInvoices(ctx);
+    const invoices = (Array.isArray(invoicesResult) ? invoicesResult : (invoicesResult as any).data) as any[];
     const invoice = invoices.find((i: any) => i.id === invoiceId) as Invoice;
     if (!invoice) {
       res.status(404).json({ message: "Invoice not found." });
       return;
     }
 
-    const customers = await this.stockOps.listCustomers(ctx) as any[];
+    const customersResult = await this.stockOps.listCustomers(ctx);
+    const customers = (Array.isArray(customersResult) ? customersResult : (customersResult as any).data) as any[];
     const customer = customers.find((c: any) => c.id === invoice.customerId);
     if (!customer) {
       res.status(404).json({ message: "Customer not found." });

@@ -81,4 +81,30 @@ export class CustomersController {
   ) {
     return this.stockOps.updateCustomer(id, body, context);
   }
+
+  @Get(":id/price-tiers")
+  @RequirePermissions("view_dashboard")
+  @ApiOperation({ summary: "List price tiers for a customer." })
+  @ApiParam({ name: "id", example: "cus_001" })
+  @ApiOkResponse()
+  listPriceTiers(
+    @CurrentAuth() context: AuthContext,
+    @Param("id") customerId: string,
+  ) {
+    return this.stockOps.listCustomerPriceTiers(customerId, context);
+  }
+
+  @Post(":id/price-tiers")
+  @RequirePermissions("manage_sales")
+  @ApiOperation({ summary: "Create a price tier for a customer." })
+  @ApiParam({ name: "id", example: "cus_001" })
+  @ApiCreatedResponse()
+  @ApiValidationError()
+  createPriceTier(
+    @CurrentAuth() context: AuthContext,
+    @Param("id") customerId: string,
+    @Body() body: { productId: string; tierPrice: number; minQuantity?: number },
+  ) {
+    return this.stockOps.createCustomerPriceTier(customerId, body, context);
+  }
 }

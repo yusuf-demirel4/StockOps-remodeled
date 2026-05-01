@@ -506,6 +506,98 @@ describe("StockOps API P0 flows", () => {
     process.env.NODE_ENV = previousNodeEnv;
     delete process.env.STOCKOPS_ALLOW_UNSIGNED_PROVIDER_WEBHOOKS;
   });
+
+  it("completes commercial workflow: customer, invoice, payment, credit note", async () => {
+    // 1. Create a customer
+    const { body: customer } = await request(app.getHttpServer())
+      .post("/v1/customers")
+      .set("Authorization", authHeader)
+      .send({
+        code: "CUS-TEST",
+        name: "Test Customer",
+        email: "test@example.com",
+      })
+      .expect(201);
+
+    expect(customer.id).toBeDefined();
+
+    // 2. Create an invoice
+    const { body: invoice } = await request(app.getHttpServer())
+      .post("/v1/invoices")
+      .set("Authorization", authHeader)
+      .send({
+        customerId: customer.id,
+        currency: "TRY",
+        taxRate: 0.20,
+        lines: [
+          { productId: "prd_monitor_27", quantity: 2, unitPrice: 200 },
+        ],
+      })
+      .expect(201);
+
+    expect(invoice.id).toBeDefined();
+    expect(invoice.status).toBe("DRAFT");
+    expect(invoice.subtotal).toBe(400);
+    expect(invoice.taxAmount).toBe(80);
+    expect(invoice.total).toBe(480);
+
+    // 3. Record partial payment
+    const { body: payment1 } = await request(app.getHttpServer())
+      .post(`/v1/invoices/${invoice.id}/payments`)
+      .set("Authorization", authHeader)
+      .send({
+        amount: 200,
+        method: "BANK_TRANSFER",
+        reference: "TR-12345",
+      })
+      .expect(201);
+
+    expect(payment1.id).toBeDefined();
+
+    // Verify invoice is partially paid
+    const { body: invoicesList } = await request(app.getHttpServer())
+      .get("/v1/invoices")
+      .set("Authorization", authHeader)
+      .expect(200);
+    
+    const updatedInvoice = invoicesList.data.find((i: any) => i.id === invoice.id);
+    expect(updatedInvoice.status).toBe("PARTIALLY_PAID");
+
+    // 4. Record full payment
+    await request(app.getHttpServer())
+      .post(`/v1/invoices/${invoice.id}/payments`)
+      .set("Authorization", authHeader)
+      .send({
+        amount: 280,
+        method: "CREDIT_CARD",
+      })
+      .expect(201);
+
+    // Verify invoice is fully paid
+    const { body: invoicesList2 } = await request(app.getHttpServer())
+      .get("/v1/invoices")
+      .set("Authorization", authHeader)
+      .expect(200);
+    
+    const fullyPaidInvoice = invoicesList2.data.find((i: any) => i.id === invoice.id);
+    expect(fullyPaidInvoice.status).toBe("PAID");
+
+    // 5. Create Credit Note
+    const { body: creditNote } = await request(app.getHttpServer())
+      .post("/v1/credit-notes")
+      .set("Authorization", authHeader)
+      .send({
+        customerId: customer.id,
+        lines: [
+          { productId: "prd_monitor_27", quantity: 1, unitPrice: 200 },
+        ],
+      })
+      .expect(201);
+
+    expect(creditNote.id).toBeDefined();
+    expect(creditNote.totalAmount).toBe(200);
+    expect(creditNote.status).toBe("ISSUED");
+  });
 });
 
 describe("API production environment guardrails", () => {

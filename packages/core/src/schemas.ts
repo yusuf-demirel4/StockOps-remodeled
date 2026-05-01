@@ -168,6 +168,26 @@ export const invoiceInputSchema = z.object({
   ).min(1),
 });
 
+export const paymentInputSchema = z.object({
+  invoiceId: z.string().min(1),
+  amount: z.coerce.number().min(0.01),
+  method: z.enum(["CASH", "BANK_TRANSFER", "CREDIT_CARD", "CHECK", "OTHER"]).default("BANK_TRANSFER"),
+  reference: z.string().trim().optional(),
+});
+
+export const creditNoteInputSchema = z.object({
+  customerId: z.string().min(1),
+  salesReturnId: z.string().optional(),
+  notes: z.string().trim().optional(),
+  lines: z.array(
+    z.object({
+      productId: z.string().min(1),
+      quantity: z.coerce.number().int().positive(),
+      unitPrice: z.coerce.number().min(0),
+    }),
+  ).min(1),
+});
+
 export const exchangeRateQuerySchema = z.object({
   baseCurrency: supportedCurrencySchema.default("EUR"),
   quoteCurrency: supportedCurrencySchema.default("TRY"),

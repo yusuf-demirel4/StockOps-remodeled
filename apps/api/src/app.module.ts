@@ -19,6 +19,7 @@ import { CreditNotesController } from "./invoices/credit-notes.controller";
 import { InvoicesController } from "./invoices/invoices.controller";
 import { PurchaseOrdersController } from "./orders/purchase-orders.controller";
 import { PickPackController } from "./orders/pick-pack.controller";
+import { PortalController } from "./portal/portal.controller";
 import { SalesOrdersController } from "./orders/sales-orders.controller";
 import { SalesReturnsController } from "./orders/sales-returns.controller";
 import { ProductsController } from "./products/products.controller";
@@ -50,6 +51,7 @@ import { IdempotencyInterceptor } from "./security/idempotency.interceptor";
     CreditNotesController,
     InvoicesController,
     PickPackController,
+    PortalController,
     ProductsController,
     PurchaseOrdersController,
     SalesOrdersController,

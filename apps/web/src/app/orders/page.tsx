@@ -10,7 +10,7 @@ import {
   ApproveReturnForm,
   CreateReturnDisclosure,
 } from "@/components/return-forms";
-import { EmptyState, Panel, StatusBadge, buttonClass } from "@/components/ui";
+import { EmptyState, Panel, StatusBadge, buttonClass, subtleButtonClass } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
 import { getAppSnapshot } from "@/lib/repository";
 import {
@@ -21,6 +21,7 @@ import {
   supplierName,
 } from "@stockops/core/format";
 import { buildPurchaseRecommendations } from "@stockops/core/purchase-recommendations";
+import { Download } from "lucide-react";
 
 const returnStatusTone: Record<string, "neutral" | "success" | "warning" | "danger"> = {
   DRAFT: "warning",
@@ -52,7 +53,15 @@ export default async function OrdersPage() {
       title="Siparişler"
       userName={snapshot.user.name}
     >
-      <div className="mb-6 flex justify-end">
+      <div className="mb-6 flex justify-end gap-2">
+        <a
+          href="/api/export/orders"
+          className={subtleButtonClass}
+          download="siparisler.csv"
+        >
+          <Download className="size-4" />
+          CSV İndir
+        </a>
         <Link className={buttonClass} href="/orders/new">
           Yeni Sipariş
         </Link>

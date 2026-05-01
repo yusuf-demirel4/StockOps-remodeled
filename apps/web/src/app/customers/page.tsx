@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { Panel, buttonClass } from "@/components/ui";
+import { Panel, buttonClass, subtleButtonClass } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
 import { listCustomers } from "@/lib/repository";
+import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +27,19 @@ export default async function CustomersPage() {
               Satış ve fatura akışlarında kullanılacak hesaplar.
             </p>
           </div>
-          <Link className={buttonClass} href="/customers/new">
-            Yeni Müşteri
-          </Link>
+          <div className="flex gap-2">
+            <a
+              href="/api/export/customers"
+              className={subtleButtonClass}
+              download="customers.csv"
+            >
+              <Download className="size-4" />
+              CSV İndir
+            </a>
+            <Link className={buttonClass} href="/customers/new">
+              Yeni Müşteri
+            </Link>
+          </div>
         </div>
 
         <Panel title="Müşteri listesi">
@@ -41,12 +52,13 @@ export default async function CustomersPage() {
                   <th className="py-2 pr-3">E-posta</th>
                   <th className="py-2 pr-3">Telefon</th>
                   <th className="py-2 pr-3">Vade (Gün)</th>
+                  <th className="py-2">Detay</th>
                 </tr>
               </thead>
               <tbody>
                 {customers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-gray-500">
+                    <td colSpan={6} className="py-8 text-center text-gray-500">
                       Henüz kayıtlı müşteri bulunmuyor.
                     </td>
                   </tr>
@@ -57,10 +69,25 @@ export default async function CustomersPage() {
                       key={customer.id}
                     >
                       <td className="py-3 pr-3 font-medium">{customer.code}</td>
-                      <td className="py-3 pr-3 font-medium">{customer.name}</td>
+                      <td className="py-3 pr-3 font-medium">
+                        <Link
+                          href={`/customers/${customer.id}`}
+                          className="hover:underline text-[var(--accent-primary)]"
+                        >
+                          {customer.name}
+                        </Link>
+                      </td>
                       <td className="py-3 pr-3">{customer.email ?? "-"}</td>
                       <td className="py-3 pr-3">{customer.phone ?? "-"}</td>
                       <td className="py-3 pr-3">{customer.paymentTermDays}</td>
+                      <td className="py-3">
+                        <Link
+                          href={`/customers/${customer.id}`}
+                          className="text-xs text-[var(--accent-primary)] hover:underline"
+                        >
+                          Görüntüle →
+                        </Link>
+                      </td>
                     </tr>
                   ))
                 )}
