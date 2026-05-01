@@ -79,6 +79,13 @@ enum InvoiceStatus {
   CANCELLED
 }
 
+enum CreditNoteStatus {
+  DRAFT
+  ISSUED
+  APPLIED
+  CANCELLED
+}
+
 enum PaymentMethod {
   CASH
   BANK_TRANSFER
@@ -215,6 +222,7 @@ model Organization {
   savedReports           SavedReport[]
   scheduledReports       ScheduledReport[]
   stocktakes             Stocktake[]
+  creditNotes            CreditNote[]
 }
 
 model ExtensionWebhookSubscription {
@@ -432,6 +440,7 @@ model Product {
   bomComponents      BomComponent[]      @relation("BomComponentProduct")
   priceTiers         CustomerPriceTier[]
   stocktakeItems     StocktakeItem[]
+  creditNoteLines    CreditNoteLine[]
 
   @@unique([organizationId, sku])
   @@index([organizationId, barcode])
@@ -676,6 +685,8 @@ model SalesReturn {
   organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   salesOrder     SalesOrder        @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
 
+  creditNotes CreditNote[]
+
   @@unique([organizationId, code])
   @@index([organizationId, status])
   @@index([salesOrderId])
@@ -709,6 +720,8 @@ model Customer {
   salesOrders     SalesOrder[]
   customerUsers   CustomerUser[]
   priceTiers      CustomerPriceTier[]
+
+  creditNotes CreditNote[]
 
   @@unique([organizationId, code])
   @@index([organizationId, name])
@@ -1137,4 +1150,40 @@ model StocktakeItem {
 
   @@index([stocktakeId])
   @@index([productId])
+}
+
+// ── Credit Notes ──
+
+model CreditNote {
+  id             String           @id @default(cuid())
+  organizationId String
+  customerId     String
+  salesReturnId  String?
+  code           String
+  status         CreditNoteStatus @default(DRAFT)
+  totalAmount    Decimal          @default(0) @db.Decimal(12, 2)
+  appliedAmount  Decimal          @default(0) @db.Decimal(12, 2)
+  issuedAt       DateTime?
+  notes          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer       Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  salesReturn    SalesReturn?     @relation(fields: [salesReturnId], references: [id], onDelete: SetNull)
+  lines          CreditNoteLine[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([customerId])
+}
+
+model CreditNoteLine {
+  id           String     @id @default(cuid())
+  creditNoteId String
+  productId    String
+  quantity     Int
+  unitPrice    Decimal    @db.Decimal(12, 2)
+  lineTotal    Decimal    @db.Decimal(12, 2)
+  creditNote   CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
 }

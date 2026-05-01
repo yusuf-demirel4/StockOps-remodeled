@@ -117,9 +117,16 @@ export const supplierUpdateInputSchema = supplierInputSchema.partial().refine(
 );
 
 export const salesOrderInputSchema = z.object({
+  customerId: z.string().optional(),
   customerName: z.string().trim().min(2),
-  productId: z.string().min(1),
-  quantity: positiveInt,
+  lines: z.array(
+    z.object({
+      productId: z.string().min(1),
+      quantity: positiveInt,
+    })
+  ).min(1).optional(),
+  productId: z.string().min(1).optional(),
+  quantity: positiveInt.optional(),
 });
 
 export const purchaseOrderInputSchema = z.object({

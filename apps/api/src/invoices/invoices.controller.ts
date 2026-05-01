@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Inject,
+  Param,
   Post,
   Query,
   UseGuards,
@@ -61,5 +62,16 @@ export class InvoicesController {
   @ApiValidationError()
   create(@CurrentAuth() context: AuthContext, @Body() body: unknown) {
     return this.stockOps.createInvoice(body, context);
+  }
+
+  @Post(":id/payments")
+  @RequirePermissions("manage_sales")
+  @ApiOperation({ summary: "Record a payment against an invoice." })
+  recordPayment(
+    @Param("id") invoiceId: string,
+    @Body() body: { amount: number; method: string; reference?: string },
+    @CurrentAuth() context: AuthContext,
+  ) {
+    return this.stockOps.recordPayment(invoiceId, body.amount, body.method, body.reference, context);
   }
 }

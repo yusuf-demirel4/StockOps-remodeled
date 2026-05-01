@@ -41,7 +41,11 @@ export type SalesOrderStatus =
   | "DRAFT"
   | "CONFIRMED"
   | "PICKING"
+  | "PARTIALLY_PICKED"
+  | "PICKED"
+  | "PARTIALLY_PACKED"
   | "PACKED"
+  | "PARTIALLY_SHIPPED"
   | "SHIPPED"
   | "DELIVERED"
   | "CANCELLED";

@@ -1104,10 +1104,43 @@ export class StockOpsApiService {
 
   async createSalesOrder(input: unknown, context: AuthContext) {
     const parsed = parseInput(salesOrderInputSchema, input);
-    await this.ensureProductExists(parsed.productId, context);
+    const lines = parsed.lines && parsed.lines.length > 0 
+      ? parsed.lines 
+      : [{ productId: parsed.productId as string, quantity: parsed.quantity as number }];
+
+    for (const line of lines) {
+      await this.ensureProductExists(line.productId, context);
+    }
 
     if (dbMode()) {
       const prisma = getPrisma();
+      
+      const linesData = await Promise.all(lines.map(async (line) => {
+        let unitPrice = 0;
+        const product = await prisma.product.findUnique({ where: { id: line.productId } });
+        if (product) unitPrice = Number(product.unitPrice || 0);
+
+        if (parsed.customerId) {
+          const tier = await prisma.customerPriceTier.findFirst({
+            where: {
+              organizationId: context.organization.id,
+              customerId: parsed.customerId,
+              productId: line.productId,
+              minQuantity: { lte: line.quantity }
+            },
+            orderBy: { minQuantity: 'desc' }
+          });
+          if (tier) unitPrice = Number(tier.tierPrice);
+        }
+        
+        return {
+          productId: line.productId,
+          quantity: line.quantity,
+          unitPrice,
+          lineTotal: unitPrice * line.quantity,
+        };
+      }));
+
       const count = await prisma.salesOrder.count({
         where: { organizationId: context.organization.id },
       });
@@ -1116,8 +1149,9 @@ export class StockOpsApiService {
           organizationId: context.organization.id,
           code: nextCode("SO", count),
           customerName: parsed.customerName,
+          customerId: parsed.customerId || null,
           lines: {
-            create: [{ productId: parsed.productId, quantity: parsed.quantity }],
+            create: linesData,
           },
         },
         include: { lines: true },
@@ -1134,7 +1168,7 @@ export class StockOpsApiService {
       code: nextCode("SO", state.salesOrders.length),
       customerName: parsed.customerName,
       status: "DRAFT",
-      lines: [{ productId: parsed.productId, quantity: parsed.quantity }],
+      lines: lines.map(l => ({ productId: l.productId, quantity: l.quantity })),
       createdAt: new Date().toISOString(),
     };
     state.salesOrders.unshift(order);
@@ -1739,6 +1773,88 @@ export class StockOpsApiService {
     };
     demoState().invoices.unshift(invoice);
     return invoice;
+  }
+
+  async recordPayment(invoiceId: string, amount: number, method: any, reference: string | undefined, context: AuthContext) {
+    if (!dbMode()) throw new BadRequestException("Payments require database mode.");
+    const prisma = getPrisma();
+
+    return await prisma.$transaction(async (tx: any) => {
+      const invoice = await tx.invoice.findFirst({
+        where: { id: invoiceId, organizationId: context.organization.id },
+        include: { payments: true }
+      });
+      if (!invoice) throw new NotFoundException("Invoice not found.");
+
+      const payment = await tx.payment.create({
+        data: {
+          organizationId: context.organization.id,
+          invoiceId: invoice.id,
+          amount,
+          method,
+          reference: reference || null,
+        }
+      });
+
+      const totalPaid = invoice.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0) + amount;
+      const totalInvoiceAmount = Number(invoice.total);
+      
+      let newStatus = invoice.status;
+      if (totalPaid >= totalInvoiceAmount) newStatus = "PAID";
+      else if (totalPaid > 0) newStatus = "PARTIALLY_PAID";
+
+      if (newStatus !== invoice.status) {
+        await tx.invoice.update({
+          where: { id: invoice.id },
+          data: { status: newStatus as any }
+        });
+      }
+
+      await this.audit(context, "CREATE" as any, "Payment", payment.id, `Payment of ${amount} for invoice ${invoice.code}`);
+      return payment;
+    });
+  }
+
+  async createCreditNote(customerId: string, salesReturnId: string | undefined, lines: any[], notes: string | undefined, context: AuthContext) {
+    if (!dbMode()) throw new BadRequestException("Credit Notes require database mode.");
+    const prisma = getPrisma();
+
+    let totalAmount = 0;
+    const lineData = lines.map(l => {
+      const lineTotal = l.quantity * l.unitPrice;
+      totalAmount += lineTotal;
+      return { ...l, lineTotal };
+    });
+
+    const count = await prisma.creditNote.count({
+      where: { organizationId: context.organization.id },
+    });
+
+    const creditNote = await prisma.creditNote.create({
+      data: {
+        organizationId: context.organization.id,
+        customerId,
+        salesReturnId: salesReturnId || null,
+        code: nextCode("CN", count),
+        status: "ISSUED",
+        totalAmount,
+        appliedAmount: 0,
+        notes: notes || null,
+        issuedAt: new Date(),
+        lines: {
+          create: lineData.map(l => ({
+            productId: l.productId,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            lineTotal: l.lineTotal,
+          }))
+        }
+      },
+      include: { lines: true }
+    });
+
+    await this.audit(context, "CREATE" as any, "CreditNote", creditNote.id, `Credit note ${creditNote.code}`);
+    return creditNote;
   }
 
   async listProductVariants(
