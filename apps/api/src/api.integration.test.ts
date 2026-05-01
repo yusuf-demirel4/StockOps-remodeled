@@ -560,7 +560,7 @@ describe("StockOps API P0 flows", () => {
       .set("Authorization", authHeader)
       .expect(200);
     
-    const updatedInvoice = invoicesList.data.find((i: any) => i.id === invoice.id);
+    const updatedInvoice = invoicesList.find((i: any) => i.id === invoice.id);
     expect(updatedInvoice.status).toBe("PARTIALLY_PAID");
 
     // 4. Record full payment
@@ -579,7 +579,7 @@ describe("StockOps API P0 flows", () => {
       .set("Authorization", authHeader)
       .expect(200);
     
-    const fullyPaidInvoice = invoicesList2.data.find((i: any) => i.id === invoice.id);
+    const fullyPaidInvoice = invoicesList2.find((i: any) => i.id === invoice.id);
     expect(fullyPaidInvoice.status).toBe("PAID");
 
     // 5. Create Credit Note
