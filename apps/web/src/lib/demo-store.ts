@@ -269,7 +269,9 @@ export function authenticateDemoUser(email: string, password: string) {
 }
 
 export function createDemoSession(userId: string, organizationId: string) {
-  const token = `demo_${userId}_${organizationId}_${randomBytes(8).toString("hex")}`;
+  // Use opaque random bytes so the token reveals nothing about the user
+  // or organization. The session record is the source of truth.
+  const token = randomBytes(32).toString("base64url");
   const session: Session = {
     id: id("ses"),
     userId,
@@ -287,24 +289,13 @@ export function createDemoSession(userId: string, organizationId: string) {
 export function getDemoAuthContext(token: string) {
   const appState = state();
   const tokenHash = hashToken(token);
-  let session = appState.sessions.find((item) => item.tokenHash === tokenHash);
+  const session = appState.sessions.find((item) => item.tokenHash === tokenHash);
 
-  if (!session && token.startsWith("demo_")) {
-    const parts = token.split("_");
-    if (parts.length >= 3) {
-      const userId = parts[1];
-      const organizationId = parts[2];
-      session = {
-        id: id("ses"),
-        userId,
-        organizationId,
-        tokenHash,
-        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(),
-        createdAt: new Date().toISOString(),
-      };
-      appState.sessions.unshift(session);
-    }
-  }
+  // NOTE: previous versions of this function reconstructed a session from the
+  // token's embedded user/org IDs when the in-memory store had been reset
+  // (e.g. after a serverless cold start). That made any stolen token a
+  // permanent forgery — and any guessable token an instant forgery. Sessions
+  // must only be honored when the hashed token has actually been issued.
 
   if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
     return null;

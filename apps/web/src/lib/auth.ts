@@ -144,8 +144,9 @@ export async function getAuthContext(): Promise<AuthContext | null> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       defaultCurrency: (session.organization as any).defaultCurrency ?? "TRY",
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      locale: (session.organization as any).locale ?? "tr-TR",
-      },    role: membership.role as Role,
+      locale: (session.organization as any).locale ?? "tr",
+    },
+    role: membership.role as Role,
     sessionToken: token,
   };
 }

@@ -4,6 +4,19 @@ import { getInvoice } from "@/lib/repository";
 
 export const dynamic = "force-dynamic";
 
+// HTML-escape user-controlled strings before they are interpolated into the
+// invoice template. Without this, fields like customer name or product name
+// can inject arbitrary script tags into the rendered PDF/HTML.
+function escapeHtml(input: unknown): string {
+  if (input === null || input === undefined) return "";
+  return String(input)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -39,11 +52,11 @@ export async function GET(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (line: any) => `
       <tr>
-        <td>${line.product?.name ?? line.productId ?? "-"}</td>
-        <td style="text-align:right">${line.quantity}</td>
-        <td style="text-align:right">${fmt.format(Number(line.unitPrice))}</td>
-        <td style="text-align:right">${Number(line.discount ?? 0)}%</td>
-        <td style="text-align:right">${fmt.format(Number(line.lineTotal))}</td>
+        <td>${escapeHtml(line.product?.name ?? line.productId ?? "-")}</td>
+        <td style="text-align:right">${escapeHtml(line.quantity)}</td>
+        <td style="text-align:right">${escapeHtml(fmt.format(Number(line.unitPrice)))}</td>
+        <td style="text-align:right">${escapeHtml(Number(line.discount ?? 0))}%</td>
+        <td style="text-align:right">${escapeHtml(fmt.format(Number(line.lineTotal)))}</td>
       </tr>`
       )
       .join("");
@@ -114,28 +127,28 @@ export async function GET(
 <body>
   <div class="header">
     <div>
-      <div class="company">${context.organization.name}</div>
+      <div class="company">${escapeHtml(context.organization.name)}</div>
       <div style="color:#666">StockOps Fatura Sistemi</div>
     </div>
     <div class="invoice-meta">
-      <h1>${inv.code}</h1>
-      <span class="badge">${inv.status}</span>
+      <h1>${escapeHtml(inv.code)}</h1>
+      <span class="badge">${escapeHtml(inv.status)}</span>
       <dl style="margin-top:8px">
         <dt>Düzenleme Tarihi</dt>
-        <dd>${fmtDate(inv.issuedAt ?? inv.createdAt)}</dd>
+        <dd>${escapeHtml(fmtDate(inv.issuedAt ?? inv.createdAt))}</dd>
         <dt>Vade Tarihi</dt>
-        <dd>${fmtDate(inv.dueDate)}</dd>
+        <dd>${escapeHtml(fmtDate(inv.dueDate))}</dd>
         <dt>Para Birimi</dt>
-        <dd>${inv.currency ?? "TRY"}</dd>
+        <dd>${escapeHtml(inv.currency ?? "TRY")}</dd>
       </dl>
     </div>
   </div>
 
   <div style="margin-bottom:16px">
     <div style="font-size:11px;color:#666;margin-bottom:4px">FATURA KESİLEN</div>
-    <div style="font-weight:700;font-size:15px">${inv.customer?.name ?? inv.customerId}</div>
-    ${inv.customer?.email ? `<div>${inv.customer.email}</div>` : ""}
-    ${inv.customer?.address ? `<div>${inv.customer.address}</div>` : ""}
+    <div style="font-weight:700;font-size:15px">${escapeHtml(inv.customer?.name ?? inv.customerId)}</div>
+    ${inv.customer?.email ? `<div>${escapeHtml(inv.customer.email)}</div>` : ""}
+    ${inv.customer?.address ? `<div>${escapeHtml(inv.customer.address)}</div>` : ""}
   </div>
 
   <table>
@@ -161,7 +174,7 @@ export async function GET(
     </div>
   </div>
 
-  ${inv.notes ? `<div style="margin-top:24px;padding:12px;background:#f8fafc;border-radius:6px;font-size:12px"><b>Not:</b> ${inv.notes}</div>` : ""}
+  ${inv.notes ? `<div style="margin-top:24px;padding:12px;background:#f8fafc;border-radius:6px;font-size:12px"><b>Not:</b> ${escapeHtml(inv.notes)}</div>` : ""}
 
   <div class="footer">
     Bu belge StockOps tarafından oluşturulmuştur. Yazdırmak için Ctrl+P tuşlayın.

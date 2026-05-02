@@ -92,7 +92,6 @@ import { hashPassword } from "@stockops/core/password";
 import type {
   AppSnapshot,
   AuthContext,
-
   InvoiceStatus,
   IntegrationSyncLog,
   PaymentMethod,
@@ -111,7 +110,7 @@ import type {
   Role,
   SalesOrder,
   SalesReturn,
-    StockMovement,
+  StockMovement,
   StockMovementType,
   Supplier,
   WebhookEvent,
