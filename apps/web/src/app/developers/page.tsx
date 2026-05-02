@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { Code2, Download, KeyRound, PlugZap, Webhook } from "lucide-react";
+import {
+  Code2,
+  Download,
+  ExternalLink,
+  KeyRound,
+  PlugZap,
+  Webhook,
+} from "lucide-react";
 import { EXTENSION_EVENTS } from "@stockops/core/extensions";
 
 import { AppShell } from "@/components/app-shell";
@@ -32,6 +39,11 @@ print(products.json())`;
 export default async function DevelopersPage() {
   const context = await requireAuth();
   const snapshot = await getAppSnapshot(context);
+  const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(
+    /\/$/,
+    "",
+  );
+  const apiDocsUrl = `${apiBaseUrl}/docs`;
 
   return (
     <AppShell
@@ -49,10 +61,16 @@ export default async function DevelopersPage() {
               <Snippet title="Python HTTP" code={pythonSnippet} />
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Link className={subtleButtonClass} href="/api/docs">
+              <a
+                className={subtleButtonClass}
+                href={apiDocsUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
                 <Code2 aria-hidden="true" className="size-4" />
                 OpenAPI
-              </Link>
+                <ExternalLink aria-hidden="true" className="size-3.5" />
+              </a>
               <Link
                 className={subtleButtonClass}
                 href="/api/export/account-portability"
@@ -142,7 +160,7 @@ function Snippet({ title, code }: { title: string; code: string }) {
       <div className="border-b border-[var(--border-table)] px-3 py-2 text-sm font-medium">
         {title}
       </div>
-      <pre className="overflow-x-auto bg-[var(--bg-empty)] p-3 text-xs leading-5">
+      <pre className="overflow-x-auto whitespace-pre-wrap break-words bg-[var(--bg-empty)] p-3 text-xs leading-5">
         <code>{code}</code>
       </pre>
     </div>
