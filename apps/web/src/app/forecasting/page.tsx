@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AppShell } from "@/components/app-shell";
+import { ContextualHelp } from "@/components/contextual-help";
 import { ForecastChart } from "@/components/forecast-chart";
 import { EmptyState, Panel } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
@@ -172,6 +173,27 @@ export default async function ForecastingPage({
               </button>
             </form>
           </Panel>
+          <ContextualHelp
+            title="Phase 13 forecast workflow"
+            items={[
+              {
+                label: "Forecast to purchase order",
+                detail:
+                  "Use demand history, supplier lead time, and current stock to convert suggestions into purchase orders.",
+              },
+              {
+                label: "Transparent model choice",
+                detail:
+                  "AUTO chooses between moving average, exponential smoothing, and seasonality-aware forecasts instead of hiding the method.",
+              },
+              {
+                label: "Portable planning",
+                detail:
+                  "Forecast results stay explainable and can be exported through reports, APIs, and the SDK.",
+                href: "/developers",
+              },
+            ]}
+          />
         </div>
 
         <div className="grid gap-6 self-start">

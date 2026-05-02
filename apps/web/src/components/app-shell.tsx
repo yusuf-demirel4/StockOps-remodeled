@@ -4,12 +4,14 @@ import {
   Boxes,
   Brain,
   ClipboardList,
+  Code2,
   Factory,
   FileDown,
   FileBarChart,
   FileText,
   LogOut,
   Package,
+  Rocket,
   Settings,
   Shield,
   TrendingUp,
@@ -23,6 +25,7 @@ import { ThemeSwitcher } from "./theme-switcher";
 
 const navigation = [
   { href: "/", label: "Dashboard", icon: BarChart3 },
+  { href: "/onboarding", label: "Onboarding", icon: Rocket },
   { href: "/products", label: "Ürünler", icon: Package },
   { href: "/inventory", label: "Stok", icon: Boxes },
   { href: "/manufacturing", label: "Üretim", icon: Factory },
@@ -34,6 +37,7 @@ const navigation = [
   { href: "/analytics", label: "Analitik", icon: TrendingUp },
   { href: "/forecasting", label: "Tahmin", icon: Brain },
   { href: "/reports", label: "Raporlar", icon: FileBarChart },
+  { href: "/developers", label: "Developers", icon: Code2 },
   { href: "/users", label: "Kullanıcılar", icon: Shield },
   { href: "/settings", label: "Ayarlar", icon: Settings },
 ];

@@ -116,6 +116,82 @@ export class ExportsController {
     res.send(csv);
   }
 
+  @Get("account-portability.json")
+  @RequirePermissions("view_dashboard")
+  @ApiOperation({
+    summary: "Export a portable account bundle as JSON.",
+  })
+  @ApiOkResponse({ description: "JSON account export" })
+  async accountPortability(
+    @CurrentAuth() ctx: AuthContext,
+    @Res() res: Response,
+  ) {
+    const [
+      products,
+      stockRows,
+      stockMovements,
+      customersResult,
+      invoicesResult,
+      salesOrdersResult,
+      purchaseOrdersResult,
+      suppliers,
+      warehouses,
+    ] = await Promise.all([
+      this.stockOps.listProducts(ctx),
+      this.stockOps.listStockRows(ctx, { limit: 200 }),
+      this.stockOps.listStockMovements(ctx, { limit: 200 }),
+      this.stockOps.listCustomers(ctx),
+      this.stockOps.listInvoices(ctx),
+      this.stockOps.listSalesOrders(ctx),
+      this.stockOps.listPurchaseOrders(ctx),
+      this.stockOps.listSuppliers(ctx),
+      this.stockOps.listWarehouses(ctx),
+    ]);
+
+    const customers = unwrapList(customersResult);
+    const invoices = unwrapList(invoicesResult);
+    const salesOrders = unwrapList(salesOrdersResult);
+    const purchaseOrders = unwrapList(purchaseOrdersResult);
+    const movements = unwrapList(stockMovements);
+
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="stockops-account-export.json"',
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      schemaVersion: "stockops.account-portability.v1",
+      generatedAt: new Date().toISOString(),
+      organization: {
+        id: ctx.organization.id,
+        name: ctx.organization.name,
+      },
+      counts: {
+        customers: customers.length,
+        invoices: invoices.length,
+        products: products.length,
+        purchaseOrders: purchaseOrders.length,
+        salesOrders: salesOrders.length,
+        stockMovements: movements.length,
+        stockRows: Array.isArray(stockRows) ? stockRows.length : 0,
+        suppliers: suppliers.length,
+        warehouses: warehouses.length,
+      },
+      data: {
+        customers,
+        invoices,
+        products,
+        purchaseOrders,
+        salesOrders,
+        stockMovements: movements,
+        stockRows,
+        suppliers,
+        warehouses,
+      },
+    });
+  }
+
   // ---- Excel Exports ----
 
   @Get("products.xlsx")
@@ -186,5 +262,17 @@ export class ExportsController {
     res.setHeader("Content-Disposition", `attachment; filename="${invoice.code}.pdf"`);
     pdf.pipe(res);
   }
+}
+
+function unwrapList<T>(value: T[] | { data?: T[] } | unknown): T[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (value && typeof value === "object" && Array.isArray((value as { data?: T[] }).data)) {
+    return (value as { data: T[] }).data;
+  }
+
+  return [];
 }
 

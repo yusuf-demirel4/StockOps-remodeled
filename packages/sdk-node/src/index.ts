@@ -10,6 +10,17 @@ export type ExtensionWebhookSubscriptionInput = {
   secret?: string;
 };
 
+export type ForecastQuery = {
+  alpha?: number;
+  beta?: number;
+  gamma?: number;
+  horizon?: number;
+  method?: "AUTO" | "MOVING_AVG" | "EXPONENTIAL_SMOOTHING" | "HOLT_WINTERS";
+  seasonLength?: number;
+  warehouseId?: string;
+  windowSize?: number;
+};
+
 export class StockOpsClient {
   private readonly baseUrl: string;
   private readonly apiToken: string;
@@ -27,6 +38,16 @@ export class StockOpsClient {
 
   listProducts<T = unknown>() {
     return this.request<T>("/products");
+  }
+
+  forecastProduct<T = unknown>(productId: string, query: ForecastQuery = {}) {
+    return this.request<T>(
+      `/forecasting/products/${encodeURIComponent(productId)}${toQueryString(query)}`,
+    );
+  }
+
+  forecastOrganization<T = unknown>(query: ForecastQuery = {}) {
+    return this.request<T>(`/forecasting/organization${toQueryString(query)}`);
   }
 
   createProduct<T = unknown>(body: {
@@ -54,6 +75,10 @@ export class StockOpsClient {
       method: "POST",
       body,
     });
+  }
+
+  exportAccountPortability<T = unknown>() {
+    return this.request<T>("/exports/account-portability.json");
   }
 
   setCustomField<T = unknown>(
@@ -91,4 +116,16 @@ export class StockOpsClient {
 
     return response.json() as Promise<T>;
   }
+}
+
+function toQueryString(query: Record<string, string | number | undefined>) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== "") {
+      params.set(key, String(value));
+    }
+  }
+
+  const serialized = params.toString();
+  return serialized ? `?${serialized}` : "";
 }

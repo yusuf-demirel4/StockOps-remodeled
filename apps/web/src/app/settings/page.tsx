@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell";
+import { ContextualHelp } from "@/components/contextual-help";
 import { EmptyState, Panel, StatusBadge } from "@/components/ui";
 import {
   WarehouseCreateForm,
@@ -318,6 +319,30 @@ export default async function SettingsPage() {
             </div>
           </dl>
         </Panel>
+
+        <ContextualHelp
+          title="Phase 13 portability"
+          items={[
+            {
+              label: "Account export",
+              detail:
+                "Download a JSON account bundle for product, stock, order, supplier, webhook, and audit portability.",
+              href: "/api/export/account-portability",
+            },
+            {
+              label: "Extension API",
+              detail:
+                "Use webhook subscriptions and custom fields to extend workflows without vendor lock-in.",
+              href: "/developers",
+            },
+            {
+              label: "Buyer onboarding",
+              detail:
+                "The setup wizard shows the shortest path from demo account to operational proof.",
+              href: "/onboarding",
+            },
+          ]}
+        />
       </div>
     </AppShell>
   );

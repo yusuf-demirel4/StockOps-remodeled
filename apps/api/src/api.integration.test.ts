@@ -74,6 +74,25 @@ describe("StockOps API P0 flows", () => {
       });
   });
 
+  it("exports a portable account bundle", async () => {
+    await request(app.getHttpServer())
+      .get("/v1/exports/account-portability.json")
+      .set("Authorization", authHeader)
+      .expect(200)
+      .expect(({ body, headers }) => {
+        expect(headers["content-disposition"]).toContain(
+          "stockops-account-export.json",
+        );
+        expect(body.schemaVersion).toBe("stockops.account-portability.v1");
+        expect(body.counts.products).toBeGreaterThan(0);
+        expect(body.data.products).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ sku: "KBD-MX-001" }),
+          ]),
+        );
+      });
+  });
+
   it("creates products and blocks duplicate SKUs", async () => {
     await request(app.getHttpServer())
       .post("/v1/products")
