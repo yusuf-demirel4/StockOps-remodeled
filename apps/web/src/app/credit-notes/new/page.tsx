@@ -1,12 +1,12 @@
-import { PageHeader } from "@/components/page-header";
-import { Panel } from "@/components/ui";
+import Link from "next/link";
+
+import { AppShell } from "@/components/app-shell";
+import { CreditNoteForm } from "@/components/credit-note-form";
+import { Panel, subtleButtonClass } from "@/components/ui";
 import { requireAuth } from "@/lib/auth";
 import { listCustomers, listProducts } from "@/lib/repository";
-import { CreditNoteForm } from "@/components/credit-note-form";
 
-export const metadata = {
-  title: "Yeni Kredi Notu | StockOps",
-};
+export const dynamic = "force-dynamic";
 
 export default async function NewCreditNotePage() {
   const context = await requireAuth();
@@ -16,11 +16,24 @@ export default async function NewCreditNotePage() {
   ]);
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Yeni Kredi Notu Oluştur" />
-      <Panel title="Kredi Notu Formu">
-        <CreditNoteForm customers={customers} products={products} />
-      </Panel>
-    </div>
+    <AppShell
+      description="Iade veya mahsup sureci icin yeni musteri kredi notu olusturun."
+      organizationName={context.organization.name}
+      role={context.role}
+      title="Yeni Kredi Notu"
+      userName={context.user.name}
+    >
+      <div className="grid gap-6">
+        <div className="flex justify-end">
+          <Link className={subtleButtonClass} href="/credit-notes">
+            Kredi Notlarına Dön
+          </Link>
+        </div>
+
+        <Panel title="Kredi notu formu">
+          <CreditNoteForm customers={customers} products={products} />
+        </Panel>
+      </div>
+    </AppShell>
   );
 }

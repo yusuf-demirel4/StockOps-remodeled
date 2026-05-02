@@ -1,11 +1,18 @@
-import { requireAuth } from "@/lib/auth";
-import { getPrisma } from "@/lib/prisma";
-import { getDataSourceMode } from "@/lib/data-source";
-import { formatCurrency, formatDate, creditNoteStatusLabel } from "@stockops/core/format";
-import { PageHeader } from "@/components/page-header";
-import { Panel } from "@/components/ui";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
+
+import { AppShell } from "@/components/app-shell";
+import { Panel, StatusBadge, subtleButtonClass } from "@/components/ui";
+import { getDataSourceMode } from "@/lib/data-source";
 import { getDemoCreditNotes } from "@/lib/demo-store";
+import { getPrisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
+import {
+  creditNoteStatusLabel,
+  formatCurrency,
+  formatDate,
+} from "@stockops/core/format";
 import type { CreditNoteStatus } from "@stockops/core/types";
 
 type CreditNoteDetailLine = {
@@ -31,8 +38,16 @@ type CreditNoteDetail = {
   lines: CreditNoteDetailLine[];
 };
 
-export const metadata = {
-  title: "Kredi Notu Detayı | StockOps",
+export const dynamic = "force-dynamic";
+
+const statusTone: Record<
+  CreditNoteStatus,
+  "neutral" | "success" | "warning" | "danger"
+> = {
+  APPLIED: "success",
+  CANCELLED: "danger",
+  DRAFT: "neutral",
+  ISSUED: "warning",
 };
 
 export default async function CreditNoteDetailPage({
@@ -42,89 +57,86 @@ export default async function CreditNoteDetailPage({
 }) {
   const { id } = await params;
   const context = await requireAuth();
-  const isDbMode = getDataSourceMode() === "database";
-
-  let note: CreditNoteDetail | null = null;
-
-  if (isDbMode) {
-    const dbNote = await getPrisma().creditNote.findFirst({
-      where: {
-        id: id,
-        organizationId: context.organization.id,
-      },
-      include: {
-        customer: true,
-        lines: { include: { product: true } },
-      },
-    });
-    note = dbNote
-      ? {
-          id: dbNote.id,
-          customerId: dbNote.customerId,
-          salesReturnId: dbNote.salesReturnId,
-          code: dbNote.code,
-          status: dbNote.status,
-          totalAmount: Number(dbNote.totalAmount),
-          appliedAmount: Number(dbNote.appliedAmount),
-          notes: dbNote.notes,
-          createdAt: dbNote.createdAt.toISOString(),
-          customer: dbNote.customer ? { name: dbNote.customer.name } : null,
-          lines: dbNote.lines.map((line) => ({
-            id: line.id,
-            productId: line.productId,
-            quantity: line.quantity,
-            unitPrice: Number(line.unitPrice),
-            lineTotal: Number(line.lineTotal),
-            product: line.product ? { name: line.product.name } : null,
-          })),
-        }
-      : null;
-  } else {
-    const demoNotes = getDemoCreditNotes(context);
-    note = demoNotes.find((n) => n.id === id) || null;
-  }
+  const note = await getCreditNoteDetail(id, context.organization.id, context);
 
   if (!note) {
     notFound();
   }
 
-  return (
-    <div className="space-y-6">
-      <PageHeader title={`Kredi Notu: ${note.code}`} />
+  const remainingAmount = Number(note.totalAmount) - Number(note.appliedAmount);
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <div className="md:col-span-2 space-y-6">
-          <Panel title="Kredi Notu Kalemleri">
+  return (
+    <AppShell
+      description="Kredi notu kalemleri, musteri bilgisi ve kullanim bakiyesi."
+      organizationName={context.organization.name}
+      role={context.role}
+      title={`Kredi Notu: ${note.code}`}
+      userName={context.user.name}
+    >
+      <div className="grid gap-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">{note.code}</h2>
+            <p className="text-sm text-[var(--text-secondary)]">
+              {note.customer?.name ?? note.customerId} icin olusturulan kredi notu.
+            </p>
+          </div>
+          <Link className={subtleButtonClass} href="/credit-notes">
+            Kredi Notlarına Dön
+          </Link>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <SummaryCard
+            label="Toplam değer"
+            value={formatCurrency(Number(note.totalAmount))}
+          />
+          <SummaryCard
+            label="Kullanılan"
+            value={formatCurrency(Number(note.appliedAmount))}
+          />
+          <SummaryCard label="Kalan" value={formatCurrency(remainingAmount)} />
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
+          <Panel title="Kredi notu kalemleri">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs uppercase bg-muted/50">
-                  <tr>
-                    <th className="px-4 py-3">Ürün</th>
-                    <th className="px-4 py-3 text-right">Miktar</th>
-                    <th className="px-4 py-3 text-right">Birim Fiyat</th>
-                    <th className="px-4 py-3 text-right">Toplam</th>
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead className="text-xs uppercase text-[var(--text-secondary)]">
+                  <tr className="border-b border-[var(--border-subtle)]">
+                    <th className="py-2 pr-3">Ürün</th>
+                    <th className="py-2 pr-3 text-right">Miktar</th>
+                    <th className="py-2 pr-3 text-right">Birim fiyat</th>
+                    <th className="py-2 text-right">Toplam</th>
                   </tr>
                 </thead>
                 <tbody>
                   {note.lines.map((line) => (
-                    <tr key={line.id || line.productId} className="border-b last:border-0">
-                      <td className="px-4 py-3 font-medium">
-                        {line.product?.name || line.productId}
+                    <tr
+                      className="border-b border-[var(--border-table)] align-top last:border-0"
+                      key={line.id ?? line.productId}
+                    >
+                      <td className="py-3 pr-3 font-medium">
+                        {line.product?.name ?? line.productId}
                       </td>
-                      <td className="px-4 py-3 text-right">{line.quantity}</td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="py-3 pr-3 text-right">
+                        {line.quantity}
+                      </td>
+                      <td className="py-3 pr-3 text-right">
                         {formatCurrency(Number(line.unitPrice))}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="py-3 text-right font-medium">
                         {formatCurrency(Number(line.lineTotal))}
                       </td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="font-medium bg-muted/20">
-                  <tr>
-                    <td colSpan={3} className="px-4 py-3 text-right">Toplam İade Tutarı:</td>
-                    <td className="px-4 py-3 text-right text-green-600">
+                <tfoot className="text-sm font-semibold">
+                  <tr className="border-t border-[var(--border-subtle)]">
+                    <td className="py-3 pr-3 text-right" colSpan={3}>
+                      Toplam iade tutarı
+                    </td>
+                    <td className="py-3 text-right">
                       {formatCurrency(Number(note.totalAmount))}
                     </td>
                   </tr>
@@ -132,70 +144,134 @@ export default async function CreditNoteDetailPage({
               </table>
             </div>
           </Panel>
-        </div>
 
-        <div className="space-y-6">
-          <Panel title="Özet">
-            <dl className="space-y-4 text-sm">
-              <div>
-                <dt className="text-muted-foreground">Durum</dt>
-                <dd className="font-medium mt-1">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      note.status === "APPLIED"
-                        ? "bg-green-100 text-green-800"
-                        : note.status === "DRAFT"
-                          ? "bg-gray-100 text-gray-800"
-                          : note.status === "ISSUED"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {creditNoteStatusLabel(note.status)}
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Müşteri</dt>
-                <dd className="font-medium">{note.customer ? note.customer.name : note.customerId}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Oluşturulma Tarihi</dt>
-                <dd className="font-medium">{formatDate(note.createdAt)}</dd>
-              </div>
-              {note.salesReturnId && (
-                <div>
-                  <dt className="text-muted-foreground">İlgili İade Formu</dt>
-                  <dd className="font-medium">{note.salesReturnId}</dd>
-                </div>
-              )}
-              {note.notes && (
-                <div>
-                  <dt className="text-muted-foreground">Notlar</dt>
-                  <dd className="font-medium">{note.notes}</dd>
-                </div>
-              )}
-            </dl>
-          </Panel>
-
-          <Panel title="Kullanım Durumu">
-             <dl className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Toplam Değer</dt>
-                  <dd className="font-medium">{formatCurrency(Number(note.totalAmount))}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Kullanılan</dt>
-                  <dd className="font-medium text-blue-600">{formatCurrency(Number(note.appliedAmount))}</dd>
-                </div>
-                <div className="flex justify-between border-t pt-2 mt-2">
-                  <dt className="font-medium">Kalan Değer</dt>
-                  <dd className="font-bold text-green-600">{formatCurrency(Number(note.totalAmount) - Number(note.appliedAmount))}</dd>
-                </div>
+          <div className="grid gap-6 self-start">
+            <Panel title="Özet">
+              <dl className="grid gap-4 text-sm">
+                <InfoRow
+                  label="Durum"
+                  value={
+                    <StatusBadge tone={statusTone[note.status]}>
+                      {creditNoteStatusLabel(note.status)}
+                    </StatusBadge>
+                  }
+                />
+                <InfoRow
+                  label="Müşteri"
+                  value={note.customer?.name ?? note.customerId}
+                />
+                <InfoRow
+                  label="Oluşturulma tarihi"
+                  value={formatDate(note.createdAt)}
+                />
+                {note.salesReturnId ? (
+                  <InfoRow label="İlgili iade" value={note.salesReturnId} />
+                ) : null}
+                {note.notes ? <InfoRow label="Notlar" value={note.notes} /> : null}
               </dl>
-          </Panel>
+            </Panel>
+
+            <Panel title="Kullanım durumu">
+              <dl className="grid gap-3 text-sm">
+                <AmountRow
+                  label="Toplam değer"
+                  value={formatCurrency(Number(note.totalAmount))}
+                />
+                <AmountRow
+                  label="Kullanılan"
+                  value={formatCurrency(Number(note.appliedAmount))}
+                />
+                <AmountRow
+                  emphasize
+                  label="Kalan değer"
+                  value={formatCurrency(remainingAmount)}
+                />
+              </dl>
+            </Panel>
+          </div>
         </div>
       </div>
+    </AppShell>
+  );
+}
+
+async function getCreditNoteDetail(
+  id: string,
+  organizationId: string,
+  context: Awaited<ReturnType<typeof requireAuth>>,
+): Promise<CreditNoteDetail | null> {
+  if (getDataSourceMode() !== "database") {
+    return getDemoCreditNotes(context).find((note) => note.id === id) ?? null;
+  }
+
+  const dbNote = await getPrisma().creditNote.findFirst({
+    where: {
+      id,
+      organizationId,
+    },
+    include: {
+      customer: true,
+      lines: { include: { product: true } },
+    },
+  });
+
+  return dbNote
+    ? {
+        id: dbNote.id,
+        customerId: dbNote.customerId,
+        salesReturnId: dbNote.salesReturnId,
+        code: dbNote.code,
+        status: dbNote.status,
+        totalAmount: Number(dbNote.totalAmount),
+        appliedAmount: Number(dbNote.appliedAmount),
+        notes: dbNote.notes,
+        createdAt: dbNote.createdAt.toISOString(),
+        customer: dbNote.customer ? { name: dbNote.customer.name } : null,
+        lines: dbNote.lines.map((line) => ({
+          id: line.id,
+          productId: line.productId,
+          quantity: line.quantity,
+          unitPrice: Number(line.unitPrice),
+          lineTotal: Number(line.lineTotal),
+          product: line.product ? { name: line.product.name } : null,
+        })),
+      }
+    : null;
+}
+
+function SummaryCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[var(--border-secondary)] bg-[var(--bg-card)] p-4 shadow-sm">
+      <p className="text-sm text-[var(--text-secondary)]">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-[var(--text-secondary)]">{label}</dt>
+      <dd className="mt-1 font-medium">{value}</dd>
+    </div>
+  );
+}
+
+function AmountRow({
+  emphasize = false,
+  label,
+  value,
+}: {
+  emphasize?: boolean;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-[var(--border-table)] pb-3 last:border-0 last:pb-0">
+      <dt className={emphasize ? "font-medium" : "text-[var(--text-secondary)]"}>
+        {label}
+      </dt>
+      <dd className={emphasize ? "font-semibold" : "font-medium"}>{value}</dd>
     </div>
   );
 }
