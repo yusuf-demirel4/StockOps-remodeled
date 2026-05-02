@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { createInitialState } from "@stockops/core/demo-data";
 import {
   assertEnoughStock,
@@ -83,6 +83,78 @@ function id(prefix: string) {
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+// In demo mode the in-memory session store does not survive serverless cold
+// starts and is not shared across instances — opening a second tab can land
+// on a different lambda that has no record of the session, and the user gets
+// bounced to /sign-in. To fix that without re-introducing the previous
+// guessable-token forgery, we sign the demo session with HMAC-SHA256 using a
+// process-wide secret. Every instance with the same SESSION_SECRET can
+// verify a token without any shared state.
+//
+// Token format: "<userId>.<organizationId>.<expiresAtIsoEpochMs>.<sig>"
+// where sig = HMAC-SHA256(SESSION_SECRET, "<userId>.<organizationId>.<exp>")
+// base64url-encoded.
+//
+// In production (database mode) this is unused — Prisma sessions handle it.
+
+const DEMO_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+
+function getSessionSecret(): string | null {
+  const secret = process.env.SESSION_SECRET;
+  if (typeof secret === "string" && secret.length >= 16) {
+    return secret;
+  }
+  return null;
+}
+
+function signDemoToken(payload: string): string {
+  const secret = getSessionSecret();
+  if (!secret) {
+    // No secret configured → fall back to opaque random tokens (single-instance).
+    return "";
+  }
+  return createHmac("sha256", secret).update(payload).digest("base64url");
+}
+
+function verifyDemoSignature(payload: string, signature: string): boolean {
+  const secret = getSessionSecret();
+  if (!secret) return false;
+  const expected = createHmac("sha256", secret).update(payload).digest();
+  let provided: Buffer;
+  try {
+    provided = Buffer.from(signature, "base64url");
+  } catch {
+    return false;
+  }
+  if (provided.length !== expected.length) return false;
+  return timingSafeEqual(expected, provided);
+}
+
+function buildSignedDemoToken(userId: string, organizationId: string, expiresAt: number) {
+  const payload = `${userId}.${organizationId}.${expiresAt}`;
+  const signature = signDemoToken(payload);
+  if (!signature) return null;
+  return `${payload}.${signature}`;
+}
+
+type DemoTokenClaims = {
+  userId: string;
+  organizationId: string;
+  expiresAt: number;
+};
+
+function parseSignedDemoToken(token: string): DemoTokenClaims | null {
+  const parts = token.split(".");
+  if (parts.length !== 4) return null;
+  const [userId, organizationId, expiresAtRaw, signature] = parts;
+  if (!userId || !organizationId || !expiresAtRaw || !signature) return null;
+  const expiresAt = Number(expiresAtRaw);
+  if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return null;
+  const payload = `${userId}.${organizationId}.${expiresAtRaw}`;
+  if (!verifyDemoSignature(payload, signature)) return null;
+  return { userId, organizationId, expiresAt };
 }
 
 function code(prefix: string, count: number) {
@@ -269,18 +341,24 @@ export function authenticateDemoUser(email: string, password: string) {
 }
 
 export function createDemoSession(userId: string, organizationId: string) {
-  // Use opaque random bytes so the token reveals nothing about the user
-  // or organization. The session record is the source of truth.
-  const token = randomBytes(32).toString("base64url");
+  const expiresAtMs = Date.now() + DEMO_SESSION_TTL_MS;
+  // Prefer a stateless HMAC-signed token so any serverless instance can
+  // verify the session without shared memory. If no SESSION_SECRET is set
+  // we fall back to opaque random bytes (single-instance only).
+  const signed = buildSignedDemoToken(userId, organizationId, expiresAtMs);
+  const token = signed ?? randomBytes(32).toString("base64url");
+
   const session: Session = {
     id: id("ses"),
     userId,
     organizationId,
     tokenHash: hashToken(token),
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(),
+    expiresAt: new Date(expiresAtMs).toISOString(),
     createdAt: new Date().toISOString(),
   };
 
+  // Still record in memory so deleteDemoSession can revoke on this instance
+  // and so authenticated calls feel snappy.
   state().sessions.unshift(session);
 
   return { token, session };
@@ -289,13 +367,27 @@ export function createDemoSession(userId: string, organizationId: string) {
 export function getDemoAuthContext(token: string) {
   const appState = state();
   const tokenHash = hashToken(token);
-  const session = appState.sessions.find((item) => item.tokenHash === tokenHash);
+  let session = appState.sessions.find((item) => item.tokenHash === tokenHash);
 
-  // NOTE: previous versions of this function reconstructed a session from the
-  // token's embedded user/org IDs when the in-memory store had been reset
-  // (e.g. after a serverless cold start). That made any stolen token a
-  // permanent forgery — and any guessable token an instant forgery. Sessions
-  // must only be honored when the hashed token has actually been issued.
+  // If this instance has no record of the session, fall back to verifying
+  // the token's HMAC signature. This is what lets a second tab opened on a
+  // different serverless instance keep its session — without re-introducing
+  // the old "any string starting with demo_ is valid" forgery, since only
+  // tokens signed with SESSION_SECRET will verify.
+  if (!session) {
+    const claims = parseSignedDemoToken(token);
+    if (claims) {
+      session = {
+        id: id("ses"),
+        userId: claims.userId,
+        organizationId: claims.organizationId,
+        tokenHash,
+        expiresAt: new Date(claims.expiresAt).toISOString(),
+        createdAt: new Date().toISOString(),
+      };
+      appState.sessions.unshift(session);
+    }
+  }
 
   if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
     return null;
