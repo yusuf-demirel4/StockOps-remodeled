@@ -18,11 +18,11 @@
     "@stockops/integration-quickbooks": "*",
     "@stockops/integration-xero": "*",
     "@stockops/queue": "*",
-    "prom-client": "^15.1.3"
+    "prom-client": "^15.1.3",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@types/node": "^20",
-    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.1.5"
   }

@@ -72,6 +72,9 @@ services:
       DATABASE_URL: postgresql://stockops:stockops@postgres:5432/stockops
       STOCKOPS_QUEUE_DRIVER: bullmq
       REDIS_URL: redis://redis:6379
+      WORKER_METRICS_PORT: 4001
+    expose:
+      - "4001"
     depends_on:
       postgres:
         condition: service_healthy

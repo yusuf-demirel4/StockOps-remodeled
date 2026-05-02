@@ -39,6 +39,7 @@ type QueueRuntime = {
     opts?: Record<string, unknown>,
   ) => Promise<QueueAddResult>;
   close: () => Promise<void>;
+  getJobCounts: (...types: string[]) => Promise<Record<string, number>>;
 };
 
 export type QueueInstance = QueueRuntime;

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 # StockOps Database Backup Script
 # Usage: ./backup.sh
 
-BACKUP_DIR="./backups"
-DB_CONTAINER="stockops-main-postgres-1" # Or postgres depending on compose project name
-DB_USER="stockops"
-DB_NAME="stockops"
+BACKUP_DIR="${BACKUP_DIR:-./backups}"
+DB_CONTAINER="${DB_CONTAINER:-stockops-main-postgres-1}"
+DB_USER="${POSTGRES_USER:-stockops}"
+DB_NAME="${POSTGRES_DB:-stockops}"
 
 mkdir -p "$BACKUP_DIR"
 
@@ -27,9 +27,7 @@ if ! docker ps | grep -q "$DB_CONTAINER"; then
     fi
 fi
 
-docker exec "$DB_CONTAINER" pg_dump -U "$DB_USER" "$DB_NAME" | gzip > "$BACKUP_FILE"
-
-if [ ${PIPESTATUS[0]} -eq 0 ]; then
+if docker exec "$DB_CONTAINER" pg_dump -U "$DB_USER" "$DB_NAME" | gzip > "$BACKUP_FILE"; then
     echo "Backup successfully created at $BACKUP_FILE"
 else
     echo "Error: Backup failed!"

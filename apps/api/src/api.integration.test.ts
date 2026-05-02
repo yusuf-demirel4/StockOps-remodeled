@@ -65,6 +65,15 @@ describe("StockOps API P0 flows", () => {
     );
   });
 
+  it("exposes Prometheus metrics for production scraping", async () => {
+    await request(app.getHttpServer())
+      .get("/v1/metrics")
+      .expect(200)
+      .expect(({ text }) => {
+        expect(text).toContain("http_requests_total");
+      });
+  });
+
   it("creates products and blocks duplicate SKUs", async () => {
     await request(app.getHttpServer())
       .post("/v1/products")

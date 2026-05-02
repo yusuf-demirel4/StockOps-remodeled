@@ -9,7 +9,7 @@ import {
   type QueueDriver,
   type QueueRuntimeConfig,
 } from "./config";
-import { Worker, type Job, type WorkerOptions } from "./bullmq";
+import { Queue, Worker, type Job, type WorkerOptions } from "./bullmq";
 
 type AnyJobPayload = JobPayloadByName[JobName];
 
@@ -18,6 +18,11 @@ export type QueueJobProcessor = (job: QueueJob) => Promise<unknown> | unknown;
 export type QueueWorkerHandle = {
   close: () => Promise<void>;
   driver: QueueDriver;
+  getQueueDepth: () => Promise<{
+    active: number;
+    delayed: number;
+    waiting: number;
+  }>;
   queueName: string;
 };
 
@@ -31,6 +36,7 @@ export function createQueueWorker(
     return {
       close: async () => {},
       driver: "memory",
+      getQueueDepth: async () => ({ active: 0, delayed: 0, waiting: 0 }),
       queueName: resolved.queueName,
     };
   }
@@ -39,6 +45,9 @@ export function createQueueWorker(
     concurrency: resolved.concurrency,
     connection: resolved.connection,
   };
+  const queue = new Queue(resolved.queueName, {
+    connection: resolved.connection,
+  });
   const worker = new Worker(
     resolved.queueName,
     async (job) =>
@@ -78,8 +87,19 @@ export function createQueueWorker(
   });
 
   return {
-    close: () => worker.close(),
+    close: async () => {
+      await worker.close();
+      await queue.close();
+    },
     driver: "bullmq",
+    getQueueDepth: async () => {
+      const counts = await queue.getJobCounts("waiting", "delayed", "active");
+      return {
+        active: counts.active ?? 0,
+        delayed: counts.delayed ?? 0,
+        waiting: counts.waiting ?? 0,
+      };
+    },
     queueName: resolved.queueName,
   };
 }

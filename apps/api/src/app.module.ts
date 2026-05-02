@@ -18,6 +18,7 @@ import { AccountingController } from "./integrations/accounting.controller";
 import { InventoryController } from "./inventory/inventory.controller";
 import { CreditNotesController } from "./invoices/credit-notes.controller";
 import { InvoicesController } from "./invoices/invoices.controller";
+import { MetricsController } from "./metrics/metrics.controller";
 import { PurchaseOrdersController } from "./orders/purchase-orders.controller";
 import { PickPackController } from "./orders/pick-pack.controller";
 import { PortalController } from "./portal/portal.controller";
@@ -52,6 +53,7 @@ import { IdempotencyInterceptor } from "./security/idempotency.interceptor";
     InventoryController,
     CreditNotesController,
     InvoicesController,
+    MetricsController,
     PickPackController,
     PortalController,
     ProductsController,

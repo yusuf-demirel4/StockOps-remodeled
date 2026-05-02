@@ -1,4 +1,4 @@
-import { Counter, Gauge, Registry, collectDefaultMetrics } from "prom-client";
+import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from "prom-client";
 
 const register = new Registry();
 
@@ -11,10 +11,11 @@ export const queueDepth = new Gauge({
   registers: [register],
 });
 
-export const jobProcessingDuration = new Gauge({
+export const jobProcessingDuration = new Histogram({
   name: "job_processing_duration_seconds",
   help: "Duration of job processing in seconds",
   labelNames: ["job_name"] as const,
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30],
   registers: [register],
 });
 
