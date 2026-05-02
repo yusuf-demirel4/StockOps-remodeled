@@ -4,13 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // Pooled connection used by the app at runtime (Supabase pooler / pgBouncer
-  // when in serverless). Falls back to DATABASE_URL when the pooled URL isn't
-  // configured.
-  url      = env("DATABASE_URL")
-  // Direct (non-pooled) connection used by Prisma for migrations and
-  // introspection. Optional — Prisma falls back to `url` if not set.
-  // directUrl = env("DIRECT_URL")
 }
 
 enum Role {
