@@ -1,5 +1,8 @@
 import type { QueueJob } from "@stockops/core/jobs";
+import type { WebhookSource } from "@stockops/core/types";
 import { getPrisma } from "@stockops/db";
+
+type SupportedStockSyncSource = Extract<WebhookSource, "SHOPIFY" | "WOOCOMMERCE">;
 
 export async function handleStockSyncDispatch(
   job: QueueJob<"integrations.stock-sync.dispatch">,
@@ -11,7 +14,7 @@ export async function handleStockSyncDispatch(
     return { status: "skipped", reason: "no-organization-id" };
   }
 
-  if (!source || !["SHOPIFY", "WOOCOMMERCE", "TRENDYOL", "HEPSIBURADA", "PAZARAMA"].includes(source)) {
+  if (!isSupportedStockSyncSource(source)) {
     return { status: "skipped", reason: "unknown-source" };
   }
 
@@ -25,7 +28,10 @@ export async function handleStockSyncDispatch(
       status: "RUNNING",
       attempts: 1,
       startedAt: new Date(),
-      metadata: { reason: job.payload.reason ?? "manual" },
+      metadata: {
+        reason: job.payload.reason ?? "manual",
+        traceId: job.payload.traceId ?? null,
+      },
     },
   });
 
@@ -51,6 +57,7 @@ export async function handleStockSyncDispatch(
         finishedAt: new Date(),
         metadata: {
           reason: job.payload.reason ?? "manual",
+          traceId: job.payload.traceId ?? null,
           productsCount: products.length,
           movementsCount: movements.length,
         },
@@ -63,6 +70,7 @@ export async function handleStockSyncDispatch(
       jobId: job.id,
       productsCount: products.length,
       movementsCount: movements.length,
+      traceId: job.payload.traceId,
       syncLogId: syncLog.id,
     };
   } catch (error) {
@@ -80,7 +88,14 @@ export async function handleStockSyncDispatch(
       status: "stock-sync-failed",
       jobId: job.id,
       reason: message,
+      traceId: job.payload.traceId,
       syncLogId: syncLog.id,
     };
   }
+}
+
+function isSupportedStockSyncSource(
+  source: WebhookSource | undefined,
+): source is SupportedStockSyncSource {
+  return source === "SHOPIFY" || source === "WOOCOMMERCE";
 }

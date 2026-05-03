@@ -438,6 +438,7 @@ describe("StockOps API P0 flows", () => {
         expect(body).toMatchObject({
           duplicate: false,
           queued: true,
+          traceId: expect.any(String),
           queue: {
             driver: "memory",
             name: "stockops.test",
@@ -452,6 +453,7 @@ describe("StockOps API P0 flows", () => {
       payload: {
         organizationId: "org_kernel_guard",
         source: "SHOPIFY",
+        traceId: expect.any(String),
         topic: "products/update",
       },
     });
@@ -506,6 +508,7 @@ describe("StockOps API P0 flows", () => {
       .expect(({ body }) => {
         expect(body).toMatchObject({
           duplicate: false,
+          traceId: expect.any(String),
           verification: {
             providerSignature: "verified",
           },
@@ -662,6 +665,12 @@ describe("API production environment guardrails", () => {
 
     process.env.SHOPIFY_WEBHOOK_SECRET = "shopify-secret";
     process.env.WOOCOMMERCE_WEBHOOK_SECRET = "woo-secret";
+    expect(() => validateApiEnvironment()).toThrow(/memory queue/);
+
+    process.env.STOCKOPS_QUEUE_DRIVER = "bullmq";
+    expect(() => validateApiEnvironment()).toThrow(/REDIS_URL/);
+
+    process.env.REDIS_URL = "redis://localhost:6379";
     expect(() => validateApiEnvironment()).not.toThrow();
   });
 });

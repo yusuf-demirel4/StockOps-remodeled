@@ -62,6 +62,7 @@ export function createQueueWorker(
         jobId: job.id,
         name: job.name,
         queueName: resolved.queueName,
+        traceId: traceIdFromPayload(job.data),
       }),
     );
   });
@@ -73,6 +74,7 @@ export function createQueueWorker(
         jobId: job?.id,
         name: job?.name,
         queueName: resolved.queueName,
+        traceId: job ? traceIdFromPayload(job.data) : undefined,
       }),
     );
   });
@@ -112,4 +114,17 @@ function toQueueJob(job: Job<AnyJobPayload, unknown, JobName>): QueueJob {
     name: job.name,
     payload: job.data,
   } as QueueJob;
+}
+
+function traceIdFromPayload(payload: unknown) {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "traceId" in payload &&
+    typeof payload.traceId === "string"
+  ) {
+    return payload.traceId;
+  }
+
+  return undefined;
 }

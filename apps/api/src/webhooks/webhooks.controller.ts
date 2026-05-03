@@ -6,6 +6,7 @@ import {
   Inject,
   Post,
   RawBody,
+  Req,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -68,8 +69,9 @@ export class WebhooksController {
     @Headers("x-shopify-topic") topic: string | undefined,
     @Body() body: unknown,
     @RawBody() rawBody: Buffer | undefined,
+    @Req() request: { requestId?: string },
   ) {
-    return this.inbox.accept("shopify", topic, body, headers, rawBody);
+    return this.inbox.accept("shopify", topic, body, headers, rawBody, request.requestId);
   }
 
   @Post("woocommerce")
@@ -97,7 +99,8 @@ export class WebhooksController {
     @Headers("x-wc-webhook-topic") topic: string | undefined,
     @Body() body: unknown,
     @RawBody() rawBody: Buffer | undefined,
+    @Req() request: { requestId?: string },
   ) {
-    return this.inbox.accept("woocommerce", topic, body, headers, rawBody);
+    return this.inbox.accept("woocommerce", topic, body, headers, rawBody, request.requestId);
   }
 }

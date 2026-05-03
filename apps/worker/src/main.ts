@@ -1,7 +1,7 @@
 import * as http from "node:http";
 import { createLogger } from "@stockops/core/logger";
 import type { QueueJob } from "@stockops/core/jobs";
-import { createQueueWorker } from "@stockops/queue";
+import { createQueueWorker, resolveQueueConfig } from "@stockops/queue";
 
 import {
   jobProcessedTotal,
@@ -15,6 +15,8 @@ import { createJob, handleJob } from "./queue";
 const logger = createLogger({ service: "stockops-worker" });
 
 async function main() {
+  validateWorkerEnvironment();
+
   const queueWorker = createQueueWorker(handleObservedJob);
   const startupJob = createJob("inventory.reorder.evaluate", {
     reason: "worker-startup-check",
@@ -73,7 +75,12 @@ async function main() {
   });
 }
 
-void main();
+void main().catch((error) => {
+  logger.error({
+    error: error instanceof Error ? error.message : String(error),
+  }, "Worker failed to start");
+  process.exit(1);
+});
 
 async function handleObservedJob(job: QueueJob) {
   const stopTimer = jobProcessingDuration.startTimer({ job_name: job.name });
@@ -81,6 +88,12 @@ async function handleObservedJob(job: QueueJob) {
   try {
     const result = await handleJob(job);
     jobProcessedTotal.inc({ job_name: job.name, status: "success" });
+    logger.info({
+      jobId: job.id,
+      name: job.name,
+      result,
+      traceId: traceIdForJob(job),
+    }, "Job processed");
     return result;
   } catch (err) {
     jobProcessedTotal.inc({ job_name: job.name, status: "failed" });
@@ -90,10 +103,21 @@ async function handleObservedJob(job: QueueJob) {
         integration: integrationLabelForJob(job.name),
       });
     }
+    logger.error({
+      error: err instanceof Error ? err.message : String(err),
+      jobId: job.id,
+      name: job.name,
+      traceId: traceIdForJob(job),
+    }, "Job failed");
     throw err;
   } finally {
     stopTimer();
   }
+}
+
+function traceIdForJob(job: QueueJob) {
+  const payload = job.payload as { traceId?: unknown };
+  return typeof payload.traceId === "string" ? payload.traceId : undefined;
 }
 
 function integrationLabelForJob(jobName: string) {
@@ -140,4 +164,23 @@ function registerShutdown(close: () => Promise<void>) {
 
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
+}
+
+function validateWorkerEnvironment() {
+  if (process.env.NODE_ENV !== "production") {
+    return;
+  }
+
+  if (process.env.APP_DATA_SOURCE !== "database") {
+    throw new Error("Production worker requires APP_DATA_SOURCE=database.");
+  }
+
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is required for the production worker.");
+  }
+
+  const queue = resolveQueueConfig();
+  if (queue.driver !== "bullmq") {
+    throw new Error("Production worker requires STOCKOPS_QUEUE_DRIVER=bullmq.");
+  }
 }

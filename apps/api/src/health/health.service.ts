@@ -53,7 +53,17 @@ export class HealthService {
   }
 
   private async checkRedis(): Promise<{ status: ServiceStatus; driver: string; error?: string }> {
-    const config = resolveQueueConfig();
+    let config: ReturnType<typeof resolveQueueConfig>;
+    try {
+      config = resolveQueueConfig();
+    } catch (err) {
+      return {
+        status: "down",
+        driver: process.env.STOCKOPS_QUEUE_DRIVER ?? "unknown",
+        error: (err as Error).message,
+      };
+    }
+
     if (config.driver === "memory") {
       return { status: "up", driver: "memory" };
     }

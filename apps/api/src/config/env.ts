@@ -1,3 +1,5 @@
+import { resolveQueueConfig } from "@stockops/queue";
+
 const DEFAULT_DEMO_TOKEN = "stockops_demo_api_key";
 
 function truthy(value: string | undefined) {
@@ -60,5 +62,10 @@ export function validateApiEnvironment() {
     throw new Error(
       "Provider webhook secrets are required in production unless STOCKOPS_ALLOW_UNSIGNED_PROVIDER_WEBHOOKS=true.",
     );
+  }
+
+  const queue = resolveQueueConfig();
+  if (queue.driver !== "bullmq") {
+    throw new Error("Production API requires STOCKOPS_QUEUE_DRIVER=bullmq.");
   }
 }

@@ -23,6 +23,7 @@ export async function handleLowStockNotificationDispatch(
       mode: "dry-run",
       provider: provider.provider,
       status: "notification-dispatched",
+      traceId: job.payload.traceId,
     };
   }
 
@@ -39,6 +40,7 @@ export async function handleLowStockNotificationDispatch(
       provider: provider.provider,
       status: "notification-skipped",
       reason: "organization-not-found",
+      traceId: job.payload.traceId,
     };
   }
 
@@ -94,6 +96,7 @@ export async function handleLowStockNotificationDispatch(
       provider: provider.provider,
       status: "notification-skipped",
       reason: "no-critical-stock",
+      traceId: job.payload.traceId,
     };
   }
 
@@ -118,6 +121,7 @@ export async function handleLowStockNotificationDispatch(
     mode: "database",
     provider: provider.provider,
     status: "notification-dispatched",
+    traceId: job.payload.traceId,
   };
 }
 
@@ -133,6 +137,7 @@ export async function handleOrderStatusNotificationDispatch(
       process.env.APP_DATA_SOURCE === "database" ? "database" : "dry-run",
     provider: provider.provider,
     status: "order-status-notification-ready",
+    traceId: job.payload.traceId,
   };
 }
 

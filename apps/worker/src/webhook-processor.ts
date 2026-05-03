@@ -10,6 +10,7 @@ const MAX_WEBHOOK_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 1000 * 60 * 5;
 
 type DatabaseWebhookEvent = {
+  headers: unknown;
   id: string;
   organizationId: string;
   payload: unknown;
@@ -28,6 +29,7 @@ export async function handleWebhookReceived(
     webhookEventId: job.payload.webhookEventId,
     organizationId: job.payload.organizationId,
     source: job.payload.source,
+    traceId: job.payload.traceId,
     topic: job.payload.topic,
   };
 }
@@ -50,11 +52,13 @@ async function processDatabaseWebhook(job: QueueJob<WebhookReceivedJobName>) {
   }
 
   const nextAttempt = event.attempts + 1;
+  const traceHeaders = mergeTraceHeader(event, job.payload.traceId);
   await prisma.webhookEvent.update({
     where: { id: event.id },
     data: {
       attempts: { increment: 1 },
       error: null,
+      ...(traceHeaders ? { headers: traceHeaders } : {}),
       nextAttemptAt: null,
       status: "PROCESSING",
     },
@@ -81,6 +85,7 @@ async function processDatabaseWebhook(job: QueueJob<WebhookReceivedJobName>) {
       status: deadLetter ? "webhook-event-dead-lettered" : "webhook-event-failed",
       jobId: job.id,
       reason: message,
+      traceId: job.payload.traceId,
       webhookEventId: event.id,
     };
   }
@@ -111,6 +116,7 @@ async function importExternalOrder(
       status: "webhook-event-ignored",
       jobId: job.id,
       reason: "unsupported-topic",
+      traceId: job.payload.traceId,
       topic: job.payload.topic,
       webhookEventId: event.id,
     };
@@ -153,6 +159,7 @@ async function importExternalOrder(
           : "webhook-event-failed",
       jobId: job.id,
       reason: "no-matching-sku",
+      traceId: job.payload.traceId,
       webhookEventId: event.id,
     };
   }
@@ -213,6 +220,7 @@ async function importExternalOrder(
       {
         organizationId: event.organizationId,
         reason: "external-order-imported",
+        traceId: job.payload.traceId,
       },
       { attempts: 3, backoffMs: 5000 },
     ),
@@ -222,6 +230,7 @@ async function importExternalOrder(
         organizationId: event.organizationId,
         reason: "external-order-imported",
         source: job.payload.source,
+        traceId: job.payload.traceId,
       },
       { attempts: 3, backoffMs: 5000 },
     ),
@@ -232,6 +241,7 @@ async function importExternalOrder(
     lines: matchedLines.length,
     status: existing ? "webhook-event-already-imported" : "webhook-event-processed",
     jobId: job.id,
+    traceId: job.payload.traceId,
     webhookEventId: event.id,
   };
 }
@@ -245,4 +255,19 @@ function externalOrderCode(source: string, externalId: string) {
     .slice(-24);
 
   return `${source === "SHOPIFY" ? "SHP" : "WOO"}-${suffix || "ORDER"}`;
+}
+
+function mergeTraceHeader(event: DatabaseWebhookEvent, traceId: string | undefined) {
+  if (!traceId) {
+    return undefined;
+  }
+
+  return {
+    ...(isRecord(event.headers) ? event.headers : {}),
+    "x-stockops-trace-id": traceId,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

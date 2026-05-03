@@ -33,6 +33,7 @@ export type WebhookReceivedPayload = {
   webhookEventId: string;
   organizationId: string;
   source: WebhookSource;
+  traceId?: string;
   topic: string;
 };
 
@@ -46,6 +47,7 @@ export type NotificationPayload = {
   channel?: NotificationChannel;
   productId?: string;
   reason?: string;
+  traceId?: string;
 };
 
 export type StockSyncPayload = {
@@ -53,6 +55,7 @@ export type StockSyncPayload = {
   productId?: string;
   source?: WebhookSource;
   reason?: string;
+  traceId?: string;
 };
 
 export type AccountingSyncPayload = {

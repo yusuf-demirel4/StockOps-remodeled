@@ -25,6 +25,14 @@ export type ResolvedQueueConfig =
       driver: "bullmq";
     });
 
+function truthy(value: string | undefined) {
+  return value === "1" || value === "true" || value === "yes";
+}
+
+function isProduction() {
+  return process.env.NODE_ENV === "production";
+}
+
 export function resolveQueueConfig(
   config: QueueRuntimeConfig = {},
 ): ResolvedQueueConfig {
@@ -45,6 +53,18 @@ export function resolveQueueConfig(
     queueName: config.queueName ?? process.env.STOCKOPS_QUEUE_NAME ?? "stockops.jobs",
     redisUrl,
   };
+
+  if (isProduction() && driver === "memory" && !truthy(process.env.STOCKOPS_ALLOW_MEMORY_QUEUE_IN_PRODUCTION)) {
+    throw new Error(
+      "Refusing to use memory queue in production. Set STOCKOPS_QUEUE_DRIVER=bullmq and REDIS_URL or UPSTASH_REDIS_URL.",
+    );
+  }
+
+  if (isProduction() && driver === "bullmq" && !redisUrl) {
+    throw new Error(
+      "REDIS_URL or UPSTASH_REDIS_URL is required when STOCKOPS_QUEUE_DRIVER=bullmq in production.",
+    );
+  }
 
   if (driver === "bullmq") {
     return {

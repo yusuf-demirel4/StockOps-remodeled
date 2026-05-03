@@ -33,6 +33,7 @@ describe("worker queue", () => {
       webhookEventId: "wh_123",
       organizationId: "org_kernel_guard",
       source: "SHOPIFY",
+      traceId: "trace_test_001",
       topic: "products/update",
     });
 
@@ -42,6 +43,7 @@ describe("worker queue", () => {
       webhookEventId: "wh_123",
       organizationId: "org_kernel_guard",
       source: "SHOPIFY",
+      traceId: "trace_test_001",
       topic: "products/update",
     });
   });
