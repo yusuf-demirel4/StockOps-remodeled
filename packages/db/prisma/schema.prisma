@@ -93,6 +93,7 @@ enum PaymentMethod {
   BANK_TRANSFER
   CREDIT_CARD
   CHECK
+  CREDIT_NOTE
   OTHER
 }
 
@@ -118,6 +119,9 @@ enum AuditAction {
 enum WebhookSource {
   SHOPIFY
   WOOCOMMERCE
+  TRENDYOL
+  HEPSIBURADA
+  PAZARAMA
 }
 
 enum WebhookEventStatus {
@@ -230,6 +234,9 @@ model Organization {
   scheduledReports       ScheduledReport[]
   stocktakes             Stocktake[]
   creditNotes            CreditNote[]
+  trendyolIntegration    TrendyolIntegration?
+  hepsiburadaIntegration HepsiburadaIntegration?
+  pazaramaIntegration    PazaramaIntegration?
 }
 
 model ExtensionWebhookSubscription {
@@ -1229,4 +1236,65 @@ model CreditNoteLine {
   lineTotal    Decimal    @db.Decimal(12, 2)
   creditNote   CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
   product      Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+}
+
+// ── Turkish Marketplace Integrations ──
+
+model TrendyolIntegration {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  supplierId     String
+  apiKey         String
+  apiSecret      String
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model HepsiburadaIntegration {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  merchantId     String
+  apiKey         String
+  apiSecret      String
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model PazaramaIntegration {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  clientId       String
+  clientSecret   String
+  accessToken    String?
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+enum HepsiburadaTicketStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model HepsiburadaSyncTicket {
+  id             String                  @id @default(cuid())
+  organizationId String
+  ticketId       String
+  type           String
+  status         HepsiburadaTicketStatus @default(PENDING)
+  error          String?
+  metadata       Json                    @default("{}")
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@index([organizationId, status])
+  @@index([ticketId])
 }

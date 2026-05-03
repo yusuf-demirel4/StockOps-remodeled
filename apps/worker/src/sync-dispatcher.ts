@@ -11,7 +11,7 @@ export async function handleStockSyncDispatch(
     return { status: "skipped", reason: "no-organization-id" };
   }
 
-  if (!source || !["SHOPIFY", "WOOCOMMERCE"].includes(source)) {
+  if (!source || !["SHOPIFY", "WOOCOMMERCE", "TRENDYOL", "HEPSIBURADA", "PAZARAMA"].includes(source)) {
     return { status: "skipped", reason: "unknown-source" };
   }
 

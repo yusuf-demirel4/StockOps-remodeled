@@ -171,7 +171,7 @@ export const invoiceInputSchema = z.object({
 export const paymentInputSchema = z.object({
   invoiceId: z.string().min(1),
   amount: z.coerce.number().min(0.01),
-  method: z.enum(["CASH", "BANK_TRANSFER", "CREDIT_CARD", "CHECK", "OTHER"]).default("BANK_TRANSFER"),
+  method: z.enum(["CASH", "BANK_TRANSFER", "CREDIT_CARD", "CHECK", "CREDIT_NOTE", "OTHER"]).default("BANK_TRANSFER"),
   reference: z.string().trim().optional(),
 });
 

@@ -1,0 +1,28 @@
+{
+  "name": "@stockops/integration-trendyol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./mapper": "./src/mapper.ts",
+    "./webhook-handler": "./src/webhook-handler.ts",
+    "./inventory-sync": "./src/inventory-sync.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@stockops/core": "*",
+    "@stockops/queue": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5",
+    "vitest": "^4.1.5"
+  }
+}

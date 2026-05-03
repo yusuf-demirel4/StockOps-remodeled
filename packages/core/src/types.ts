@@ -35,6 +35,7 @@ export type PaymentMethod =
   | "BANK_TRANSFER"
   | "CREDIT_CARD"
   | "CHECK"
+  | "CREDIT_NOTE"
   | "OTHER";
 
 export type CreditNoteStatus =
@@ -65,7 +66,7 @@ export type PurchaseOrderStatus =
   | "PARTIALLY_RECEIVED"
   | "COMPLETED"
   | "CANCELLED";
-export type WebhookSource = "SHOPIFY" | "WOOCOMMERCE";
+export type WebhookSource = "SHOPIFY" | "WOOCOMMERCE" | "TRENDYOL" | "HEPSIBURADA" | "PAZARAMA";
 export type ExtensionWebhookStatus = "ACTIVE" | "PAUSED";
 export type ExtensionEventName =
   | "order.created"

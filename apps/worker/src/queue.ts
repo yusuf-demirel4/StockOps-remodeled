@@ -28,6 +28,20 @@ export async function handleJob(job: QueueJob) {
       return handleWebhookReceived(
         job as QueueJob<"woocommerce.webhook.received">,
       );
+    case "trendyol.webhook.received":
+      return handleWebhookReceived(
+        job as QueueJob<"trendyol.webhook.received">,
+      );
+    case "hepsiburada.webhook.received":
+      return handleWebhookReceived(
+        job as QueueJob<"hepsiburada.webhook.received">,
+      );
+    case "pazarama.webhook.received":
+      return handleWebhookReceived(
+        job as QueueJob<"pazarama.webhook.received">,
+      );
+    case "hepsiburada.ticket.poll":
+      return { status: "ticket-polled", jobId: job.id };
     case "inventory.reorder.evaluate":
       return { status: "reorder-evaluated", jobId: job.id };
     case "notifications.low-stock.dispatch":

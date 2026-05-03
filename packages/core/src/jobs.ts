@@ -4,6 +4,10 @@ import type { NotificationChannel } from "./types";
 export const jobNames = [
   "shopify.webhook.received",
   "woocommerce.webhook.received",
+  "trendyol.webhook.received",
+  "hepsiburada.webhook.received",
+  "pazarama.webhook.received",
+  "hepsiburada.ticket.poll",
   "integrations.stock-sync.dispatch",
   "inventory.reorder.evaluate",
   "notifications.low-stock.dispatch",
@@ -20,7 +24,10 @@ export type JobName = (typeof jobNames)[number];
 
 export type WebhookReceivedJobName =
   | "shopify.webhook.received"
-  | "woocommerce.webhook.received";
+  | "woocommerce.webhook.received"
+  | "trendyol.webhook.received"
+  | "hepsiburada.webhook.received"
+  | "pazarama.webhook.received";
 
 export type WebhookReceivedPayload = {
   webhookEventId: string;
@@ -55,9 +62,18 @@ export type AccountingSyncPayload = {
   syncLogId?: string;
 };
 
+export type HepsiburadaTicketPollPayload = {
+  organizationId: string;
+  ticketId?: string;
+};
+
 export type JobPayloadByName = {
   "shopify.webhook.received": WebhookReceivedPayload;
   "woocommerce.webhook.received": WebhookReceivedPayload;
+  "trendyol.webhook.received": WebhookReceivedPayload;
+  "hepsiburada.webhook.received": WebhookReceivedPayload;
+  "pazarama.webhook.received": WebhookReceivedPayload;
+  "hepsiburada.ticket.poll": HepsiburadaTicketPollPayload;
   "integrations.stock-sync.dispatch": StockSyncPayload;
   "inventory.reorder.evaluate": ReorderEvaluatePayload;
   "notifications.low-stock.dispatch": NotificationPayload;
