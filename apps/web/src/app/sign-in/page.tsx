@@ -31,6 +31,8 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const { error } = await searchParams;
   const showDemoCreds = shouldShowDemoCredentials();
 
+  const isDemoMode = getDataSourceMode() === "demo";
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)] px-5 py-10 text-[var(--text-primary)]">
       <section className="w-full max-w-[420px] rounded-lg border border-[var(--border-secondary)] bg-[var(--bg-card)] p-6 shadow-sm">
@@ -39,7 +41,12 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             <Boxes aria-hidden="true" className="size-5" />
           </span>
           <div>
-            <h1 className="text-xl font-semibold">StockOps</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold">StockOps</h1>
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${isDemoMode ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
+                {isDemoMode ? "Demo Mode" : "Live"}
+              </span>
+            </div>
             <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--text-secondary)]">
               {t("title")}
             </p>

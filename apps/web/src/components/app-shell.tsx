@@ -28,15 +28,23 @@ const navigation = [
   { href: "/onboarding", label: "Onboarding", icon: Rocket },
   { href: "/products", label: "Ürünler", icon: Package },
   { href: "/inventory", label: "Stok", icon: Boxes },
-  { href: "/manufacturing", label: "Üretim", icon: Factory },
+  ...(process.env.NEXT_PUBLIC_FEATURE_MANUFACTURING === "true"
+    ? [{ href: "/manufacturing", label: "Üretim", icon: Factory }]
+    : []),
   { href: "/customers", label: "Müşteriler", icon: Users },
   { href: "/orders", label: "Siparişler", icon: ClipboardList },
   { href: "/invoices", label: "Faturalar", icon: FileText },
   { href: "/credit-notes", label: "Kredi Notları", icon: FileDown },
   { href: "/suppliers", label: "Tedarikçiler", icon: Truck },
-  { href: "/analytics", label: "Analitik", icon: TrendingUp },
-  { href: "/forecasting", label: "Tahmin", icon: Brain },
-  { href: "/reports", label: "Raporlar", icon: FileBarChart },
+  ...(process.env.NEXT_PUBLIC_FEATURE_ANALYTICS === "true"
+    ? [{ href: "/analytics", label: "Analitik", icon: TrendingUp }]
+    : []),
+  ...(process.env.NEXT_PUBLIC_FEATURE_FORECASTING === "true"
+    ? [{ href: "/forecasting", label: "Tahmin", icon: Brain }]
+    : []),
+  ...(process.env.NEXT_PUBLIC_FEATURE_REPORTS === "true"
+    ? [{ href: "/reports", label: "Raporlar", icon: FileBarChart }]
+    : []),
   { href: "/developers", label: "Developers", icon: Code2 },
   { href: "/users", label: "Kullanıcılar", icon: Shield },
   { href: "/settings", label: "Ayarlar", icon: Settings },

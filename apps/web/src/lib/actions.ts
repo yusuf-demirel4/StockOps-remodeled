@@ -71,43 +71,57 @@ function success(message: string): ActionState {
 }
 
 function failure(error: unknown): ActionState {
+  const { message, code } = actionErrorMessage(error);
   return {
     actionId: Date.now(),
-    message: actionErrorMessage(error),
+    message,
     status: "error",
+    code,
   };
 }
 
-function actionErrorMessage(error: unknown) {
+function actionErrorMessage(error: unknown): { message: string, code?: string } {
   if (error instanceof ZodError) {
-    return "Form alanlarını kontrol edin. Zorunlu alanlar veya sayı değerleri geçersiz.";
+    return { message: "Form alanlarını kontrol edin. Zorunlu alanlar veya sayı değerleri geçersiz.", code: "VALIDATION_ERROR" };
   }
 
-  if (!(error instanceof Error)) {
-    return "İşlem tamamlanamadı. Lütfen tekrar deneyin.";
+  if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {
+    if (error.code === "P2002") {
+      return { message: "Bu kayıt zaten mevcut. Benzersiz alanları kontrol edin.", code: "P2002" };
+    }
+    if (error.code === "P2025") {
+      return { message: "Kayıt bulunamadı veya artık güncel değil.", code: "P2025" };
+    }
+    if (error.code === "P2003") {
+      return { message: "İşlem yapılamadı. Bu kayıt başka verilerle ilişkili.", code: "P2003" };
+    }
   }
 
-  if (error.message.startsWith("Insufficient stock")) {
-    return "Yetersiz stok. Çıkış miktarı eldeki stoktan büyük.";
+  if (error instanceof Error) {
+    if (error.message.startsWith("Insufficient stock")) {
+      return { message: "Yetersiz stok. Çıkış miktarı eldeki stoktan büyük.", code: "INSUFFICIENT_STOCK" };
+    }
+
+    if (
+      error.message.includes("SKU already") ||
+      error.message.includes("Unique constraint") ||
+      error.message.includes("zaten")
+    ) {
+      return { message: "Bu kayıt zaten mevcut. Benzersiz alanları kontrol edin.", code: "P2002" };
+    }
+
+    if (
+      error.message.includes("not found") ||
+      error.message.includes("bulunamadi") ||
+      error.message.includes("bulunamad")
+    ) {
+      return { message: "Kayıt bulunamadı veya artık güncel değil.", code: "P2025" };
+    }
   }
 
-  if (
-    error.message.includes("SKU already") ||
-    error.message.includes("Unique constraint") ||
-    error.message.includes("zaten")
-  ) {
-    return "Bu kayıt zaten mevcut. Benzersiz alanları kontrol edin.";
-  }
-
-  if (
-    error.message.includes("not found") ||
-    error.message.includes("bulunamadi") ||
-    error.message.includes("bulunamad")
-  ) {
-    return "Kayıt bulunamadı veya artık güncel değil.";
-  }
-
-  return error.message || "İşlem tamamlanamadı. Lütfen tekrar deneyin.";
+  const errorId = crypto.randomUUID().slice(0, 8);
+  console.error(`[Error ID: ${errorId}]`, error);
+  return { message: `İşlem tamamlanamadı. Lütfen destek ekibine şu kodu iletin: ${errorId}`, code: "UNKNOWN_ERROR" };
 }
 
 async function runMutation(

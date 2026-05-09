@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 import { clsx } from "clsx";
 import type { LucideProps } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 export function StatCard({
   title,
@@ -100,6 +101,23 @@ export function EmptyState({ children }: { children: ReactNode }) {
   return (
     <div className="rounded-md border border-dashed border-[var(--border-dashed)] bg-[var(--bg-empty)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]">
       {children}
+    </div>
+  );
+}
+
+export function ErrorToast({ message, code }: { message?: string; code?: string }) {
+  if (!message) return null;
+  return (
+    <div className="mb-4 flex items-start gap-3 rounded-md bg-[var(--accent-danger-bg)] p-4 text-[var(--accent-danger-text)] shadow-sm">
+      <AlertCircle className="mt-0.5 size-5 shrink-0" />
+      <div className="flex-1">
+        <p className="text-sm font-medium">{message}</p>
+        {code && (
+          <p className="mt-1 text-xs opacity-80">
+            Hata Kodu: <code className="rounded bg-black/10 px-1 py-0.5 font-mono">{code}</code>
+          </p>
+        )}
+      </div>
     </div>
   );
 }

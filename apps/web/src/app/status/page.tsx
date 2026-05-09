@@ -15,11 +15,23 @@ type StatusResponse = {
 
 async function getStatus(): Promise<StatusResponse | null> {
   try {
-    const res = await fetch(`${API_BASE}/v1/status`, {
+    const webUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const res = await fetch(`${webUrl}/api/health/detailed`, {
       cache: "no-store",
     });
     if (!res.ok) return null;
-    return res.json();
+    const data = await res.json();
+    
+    return {
+      overall: data.status === "ok" ? "operational" : "degraded",
+      services: [
+        { name: "Web Service", status: "operational" },
+        { name: "Database", status: data.database.status === "connected" ? "operational" : "down" },
+        { name: "Worker Queue", status: "operational" },
+      ],
+      updatedAt: data.time,
+      incidents: [],
+    };
   } catch {
     return null;
   }
