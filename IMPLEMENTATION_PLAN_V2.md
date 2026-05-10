@@ -462,6 +462,26 @@ When you make a non-obvious decision, log it here with date and rationale. Futur
   Reason: app-layer filtering already enforces tenant isolation; Option B is
   significant effort that adds value only when a non-superuser DB role exists.
   Revisit if a multi-org self-serve flow ships.
+
+[2026-05-10] Wrapped Credit Notes nav item behind NEXT_PUBLIC_FEATURE_CREDIT_NOTES.
+  Reason: plan classifies it as "Stub — Coming in v1.1". Hiding it prevents users
+  from accessing an unverified surface. The page code stays in the repo unchanged.
+
+[2026-05-10] Added SESSION_SECRET to CI e2e job environment.
+  Reason: demo-mode session cookies are HMAC-signed using SESSION_SECRET. Without
+  it, loginAsDemoUser() in Playwright would produce unsigned cookies that the
+  middleware rejects, causing every protected-page test to redirect to /sign-in.
+  The CI value is a fixed string, not a real secret — it only signs test sessions.
+
+[2026-05-10] Added NEXT_PUBLIC_FEATURE_* documentation to .env.example.
+  Reason: without explicit defaults, a fresh deployment could accidentally show
+  experimental surfaces if a previous developer had the env var set locally.
+  All feature flags now default to empty (hidden).
+
+[2026-05-10] Phase 0 Vercel 7-day uptime gate waived.
+  Reason: user confirmed the app is being migrated away from Vercel. The gate
+  cannot be measured on a platform being decommissioned. All other Phase 0 gates
+  are green.
 ```
 
 ---

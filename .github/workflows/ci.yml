@@ -101,6 +101,10 @@ jobs:
     env:
       APP_DATA_SOURCE: demo
       PLAYWRIGHT_BASE_URL: http://localhost:3000
+      # SESSION_SECRET is required to sign demo-mode session cookies.
+      # This value is CI-only and not a real production secret.
+      SESSION_SECRET: ci_playwright_session_secret_not_for_production
+      NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: "true"
 
     steps:
       - uses: actions/checkout@v4
@@ -124,6 +128,8 @@ jobs:
         run: npm run build --filter=web
         env:
           APP_DATA_SOURCE: demo
+          SESSION_SECRET: ci_playwright_session_secret_not_for_production
+          NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: "true"
 
       - name: Run E2E tests
         run: npm run test:e2e
@@ -132,6 +138,8 @@ jobs:
           CI: true
           APP_DATA_SOURCE: demo
           PLAYWRIGHT_BASE_URL: http://localhost:3000
+          SESSION_SECRET: ci_playwright_session_secret_not_for_production
+          NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: "true"
 
       - name: Upload Playwright report
         if: always()

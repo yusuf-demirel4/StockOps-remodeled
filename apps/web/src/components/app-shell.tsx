@@ -34,7 +34,9 @@ const navigation = [
   { href: "/customers", label: "Müşteriler", icon: Users },
   { href: "/orders", label: "Siparişler", icon: ClipboardList },
   { href: "/invoices", label: "Faturalar", icon: FileText },
-  { href: "/credit-notes", label: "Kredi Notları", icon: FileDown },
+  ...(process.env.NEXT_PUBLIC_FEATURE_CREDIT_NOTES === "true"
+    ? [{ href: "/credit-notes", label: "Kredi Notları", icon: FileDown }]
+    : []),
   { href: "/suppliers", label: "Tedarikçiler", icon: Truck },
   ...(process.env.NEXT_PUBLIC_FEATURE_ANALYTICS === "true"
     ? [{ href: "/analytics", label: "Analitik", icon: TrendingUp }]
