@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDataSourceMode } from "@/lib/data-source";
-import { getPrisma } from "@stockops/db/src/client";
+import { getPrisma } from "@stockops/db/client";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -8,7 +8,7 @@ export const revalidate = 0;
 export async function GET() {
   const mode = getDataSourceMode();
   let dbStatus = "unknown";
-  let lastMigration = null;
+  let lastMigration: string | null = null;
   
   if (mode === "database") {
     try {
