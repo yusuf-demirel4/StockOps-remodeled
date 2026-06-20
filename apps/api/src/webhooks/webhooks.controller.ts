@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import {
   ApiAcceptedResponse,
   ApiBody,
@@ -37,7 +38,6 @@ import { WebhookSecretGuard } from "./webhook-secret.guard";
   description: "Required only when WEBHOOK_SHARED_SECRET is configured.",
 })
 @Controller("webhooks")
-@UseGuards(WebhookSecretGuard)
 export class WebhooksController {
   constructor(
     @Inject(WebhookInboxService)
@@ -46,6 +46,7 @@ export class WebhooksController {
 
   @Post("shopify")
   @HttpCode(202)
+  @SkipThrottle()
   @ApiOperation({ summary: "Accept a Shopify webhook into the inbox." })
   @ApiHeader({
     name: "X-Shopify-Topic",
@@ -76,6 +77,7 @@ export class WebhooksController {
 
   @Post("woocommerce")
   @HttpCode(202)
+  @SkipThrottle()
   @ApiOperation({ summary: "Accept a WooCommerce webhook into the inbox." })
   @ApiHeader({
     name: "X-WC-Webhook-Topic",

@@ -1,5 +1,7 @@
 # StockOps
 
+> **Note:** This project is a fork and remodeled version of the original [StockOps](https://github.com/Kernel-Guard/StockOps) repository.
+
 Turkce arayuzlu, kod ve veri modeli Ingilizce olan stok takip yonetim sistemi.
 
 ## Mimari
