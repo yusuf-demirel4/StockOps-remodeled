@@ -237,6 +237,7 @@ model Organization {
   trendyolIntegration    TrendyolIntegration?
   hepsiburadaIntegration HepsiburadaIntegration?
   pazaramaIntegration    PazaramaIntegration?
+  shopifyIntegrations    ShopifyIntegration[]
 }
 
 model ExtensionWebhookSubscription {
@@ -1297,4 +1298,19 @@ model HepsiburadaSyncTicket {
 
   @@index([organizationId, status])
   @@index([ticketId])
+}
+
+model ShopifyIntegration {
+  id             String       @id @default(cuid())
+  organizationId String
+  shopDomain     String       @unique
+  accessToken    String
+  scopes         String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, shopDomain])
+  @@index([shopDomain])
 }

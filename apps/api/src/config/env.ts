@@ -64,6 +64,10 @@ export function validateApiEnvironment() {
     );
   }
 
+  if (!process.env.ENCRYPTION_KEY || Buffer.from(process.env.ENCRYPTION_KEY, 'hex').length !== 32) {
+    throw new Error("ENCRYPTION_KEY must be a 64-character hex string (32 bytes) in production.");
+  }
+
   const queue = resolveQueueConfig();
   if (queue.driver !== "bullmq") {
     throw new Error("Production API requires STOCKOPS_QUEUE_DRIVER=bullmq.");

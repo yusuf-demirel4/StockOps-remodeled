@@ -212,19 +212,44 @@ export class WebhookInboxService {
       );
     }
 
-    const organization = await prisma.organization.findUnique({
-      where: {
-        slug: process.env.WEBHOOK_DEFAULT_ORGANIZATION_SLUG ?? "kernelguard",
-      },
-    });
+    let organizationId: string | undefined;
 
-    if (!organization) {
-      throw new NotFoundException("Default webhook organization not found.");
+    if (source === "SHOPIFY") {
+      const shopDomain = webhookHeader(headers, "x-shopify-shop-domain");
+      if (!shopDomain) {
+        throw new BadRequestException("Missing x-shopify-shop-domain header.");
+      }
+
+      const integration = await prisma.shopifyIntegration.findUnique({
+        where: { shopDomain },
+      });
+
+      if (integration) {
+        organizationId = integration.organizationId;
+
+        if (topic === "app/uninstalled") {
+          await prisma.shopifyIntegration.update({
+            where: { id: integration.id },
+            data: { isActive: false },
+          });
+        }
+      }
+    } else {
+      const organization = await prisma.organization.findUnique({
+        where: {
+          slug: process.env.WEBHOOK_DEFAULT_ORGANIZATION_SLUG ?? "kernelguard",
+        },
+      });
+      organizationId = organization?.id;
+    }
+
+    if (!organizationId) {
+      throw new NotFoundException(`Webhook organization not found for source ${source}.`);
     }
 
     const event = await prisma.webhookEvent.create({
       data: {
-        organizationId: organization.id,
+        organizationId: organizationId,
         source,
         topic,
         externalId: externalId ?? null,
@@ -234,7 +259,7 @@ export class WebhookInboxService {
       },
     });
 
-    return this.response(event.id, source, topic, false, organization.id, verified, traceId);
+    return this.response(event.id, source, topic, false, organizationId, verified, traceId);
   }
 
   private async response(

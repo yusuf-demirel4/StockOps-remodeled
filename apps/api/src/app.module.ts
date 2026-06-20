@@ -35,6 +35,8 @@ import { WebhookSecretGuard } from "./webhooks/webhook-secret.guard";
 import { WebhooksController } from "./webhooks/webhooks.controller";
 import { IdempotencyInterceptor } from "./security/idempotency.interceptor";
 
+import { ShopifyAuthController } from "./auth/oauth/providers/shopify.controller";
+
 @Module({
   imports: [
     ThrottlerModule.forRoot([{
@@ -44,6 +46,7 @@ import { IdempotencyInterceptor } from "./security/idempotency.interceptor";
   ],
   controllers: [
     AuthController,
+    ShopifyAuthController,
     CustomersController,
     ExportsController,
     ExtensionsController,

@@ -8,14 +8,53 @@ export function escapeHtml(input: unknown): string {
     .replace(/'/g, "&#39;");
 }
 
+interface InvoiceLine {
+  product?: { name: string };
+  productId?: string;
+  quantity: number;
+  unitPrice: number;
+  discount?: number;
+  lineTotal: number;
+}
+
+interface Invoice {
+  code: string;
+  total: number;
+  subtotal?: number;
+  taxRate?: number;
+  taxAmount?: number;
+  currency?: string;
+  status: string;
+  issuedAt?: string | Date;
+  createdAt?: string | Date;
+  dueDate?: string | Date;
+  notes?: string;
+  customer?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    taxId?: string;
+    billingAddress?: string | object;
+  };
+  customerId?: string;
+  lines?: InvoiceLine[];
+  payments?: Array<{ amount: number }>;
+}
+
+interface Organization {
+  name: string;
+  taxId?: string;
+  address?: string;
+}
+
 export function generateInvoiceHtml(
-  invoice: any,
-  organization: any,
+  invoice: Invoice,
+  organization: Organization,
   isPrintPage = false,
 ): string {
   const totalPaid =
     invoice.payments?.reduce(
-      (s: number, p: any) => s + Number(p.amount),
+      (s: number, p: { amount: number }) => s + Number(p.amount),
       0,
     ) ?? 0;
   const remaining = Number(invoice.total) - totalPaid;
@@ -32,7 +71,7 @@ export function generateInvoiceHtml(
 
   const linesHtml = (invoice.lines ?? [])
     .map(
-      (line: any) =>
+      (line: InvoiceLine) =>
         "<tr>" +
         "<td>" + escapeHtml(line.product?.name ?? line.productId ?? "-") + "</td>" +
         '<td style="text-align:right">' + escapeHtml(line.quantity) + "</td>" +

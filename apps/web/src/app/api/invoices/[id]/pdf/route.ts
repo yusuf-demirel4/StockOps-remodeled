@@ -40,7 +40,7 @@ export async function GET(
       return new NextResponse(Buffer.from(pdf), {
         headers: {
           "Content-Type": "application/pdf",
-          "Content-Disposition": `inline; filename="INV-${(invoice as any).code}.pdf"`,
+          "Content-Disposition": `inline; filename="INV-${invoice.code}.pdf"`,
         },
       });
     } catch (e) {

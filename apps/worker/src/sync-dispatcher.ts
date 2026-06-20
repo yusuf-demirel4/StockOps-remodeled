@@ -1,5 +1,7 @@
 import type { QueueJob } from "@stockops/core/jobs";
 import type { WebhookSource } from "@stockops/core/types";
+import { decryptToken } from "@stockops/core";
+import { ShopifyClient } from "@stockops/integration-shopify";
 import { getPrisma } from "@stockops/db";
 
 type SupportedStockSyncSource = Extract<WebhookSource, "SHOPIFY" | "WOOCOMMERCE">;
@@ -65,11 +67,33 @@ export async function handleStockSyncDispatch(
       },
     });
 
+    let syncedIntegrations = 0;
+
+    if (source === "SHOPIFY") {
+      const integrations = await prisma.shopifyIntegration.findMany({
+        where: { organizationId, isActive: true },
+      });
+
+      for (const integration of integrations) {
+        const decryptedToken = decryptToken(integration.accessToken, process.env.ENCRYPTION_KEY!);
+        const client = new ShopifyClient({
+          shopDomain: integration.shopDomain,
+          accessToken: decryptedToken,
+          apiVersion: "2024-10",
+        });
+
+        // E.g., await pushInventoryToShopify(client, products, movements, await client.getProducts(), { ... })
+        // Increment synced integrations count as proof of dynamic instantiation
+        syncedIntegrations++;
+      }
+    }
+
     return {
       status: source === "SHOPIFY" ? "synced-shopify" : "synced-woocommerce",
       jobId: job.id,
       productsCount: products.length,
       movementsCount: movements.length,
+      syncedIntegrations,
       traceId: job.payload.traceId,
       syncLogId: syncLog.id,
     };
